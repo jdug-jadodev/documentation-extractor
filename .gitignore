@@ -1,0 +1,20 @@
+# Repositorios de aplicación clonados fuera del repositorio de conocimiento
+../*/
+repos/
+
+# Resultados locales no publicados
+results/runs/*
+!results/runs/.gitkeep
+results/cache/*
+!results/cache/.gitkeep
+
+# Secretos y archivos locales
+.env
+.env.*
+!.env.example
+*.secret.*
+
+# Herramientas y temporales
+.vscode/
+*.log
+__pycache__/

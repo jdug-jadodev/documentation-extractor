@@ -1,0 +1,11 @@
+schema_version: 1
+name: api
+required:
+  - id
+  - repository
+  - method
+  - path
+  - evidence
+properties:
+  method: [GET, POST, PUT, PATCH, DELETE]
+  status: [automated, review_required, human_validated, stale]

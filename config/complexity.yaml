@@ -1,0 +1,95 @@
+schema_version: 1
+name: code-change-complexity
+description: Clasificación preliminar del esfuerzo, riesgo y coordinación de solicitudes que afectan código.
+applies_to:
+  - specification
+  - migration
+  - adr
+  - flow_analysis
+  - targeted_search
+  - development_request
+
+levels:
+  low:
+    score_range: [0, 4]
+    meaning: Cambio localizado, reversible y con pocas dependencias conocidas.
+    minimum_agents: [inventory, extraction, review]
+    strong_reasoning: false
+    confirmation_required: false
+  medium:
+    score_range: [5, 9]
+    meaning: Cambio con varias piezas, contrato afectado o dependencias que requieren validación.
+    minimum_agents: [inventory, extraction, integration, documentation, review, proposal]
+    strong_reasoning: conditional
+    confirmation_required: conditional
+  high:
+    score_range: [10, 14]
+    meaning: Cambio transversal, migración relevante o riesgo alto para datos, contratos, operación o compatibilidad.
+    minimum_agents: [inventory, extraction, integration, documentation, review, proposal]
+    strong_reasoning: true
+    confirmation_required: true
+  critical:
+    score_range: [15, 20]
+    meaning: Cambio de alto impacto con múltiples repositorios, datos críticos, ruptura de compatibilidad o migración irreversible.
+    minimum_agents: [inventory, extraction, integration, documentation, review, proposal]
+    strong_reasoning: true
+    confirmation_required: true
+    requires_human_design_review: true
+
+factors:
+  repositories:
+    points:
+      one: 0
+      two: 2
+      three_or_more: 4
+    evidence: Repositorios, ramas y módulos implicados en workspace-repos.yaml y el inventario.
+  components:
+    points:
+      one_module: 0
+      two_or_three_modules: 1
+      more_than_three_modules: 2
+    evidence: Proyectos, módulos y componentes detectados.
+  interfaces:
+    points:
+      none_or_internal: 0
+      internal_contract: 1
+      public_api_or_message: 2
+      breaking_contract: 4
+    evidence: APIs, eventos, mensajes, esquemas y consumidores.
+  data:
+    points:
+      none: 0
+      read_only: 1
+      write_or_schema_change: 2
+      migration_or_data_loss_risk: 4
+    evidence: Persistencia, migraciones, integridad y volumen de datos.
+  runtime:
+    points:
+      none: 0
+      configuration_or_deployment: 1
+      availability_or_security: 2
+      production_critical: 4
+    evidence: Configuración, operación, seguridad, disponibilidad y entorno productivo.
+  uncertainty:
+    points:
+      low: 0
+      medium: 1
+      high: 2
+    evidence: Desconocidos, contradicciones y confianza de los hallazgos.
+
+classification_rules:
+  - Sumar los puntos de los factores con evidencia disponible.
+  - Si falta evidencia para un factor, registrarlo como unknown y no asumir el valor mínimo sin indicarlo.
+  - Si hay migración de datos, ruptura de contrato o impacto productivo crítico, el nivel mínimo es high.
+  - Si hay tres o más repositorios y una migración irreversible, el nivel mínimo es critical.
+  - Si el nivel calculado supera el presupuesto disponible, detenerse y solicitar una decisión de alcance.
+  - La clasificación puede cambiar después de extracción o revisión; conservar la clasificación inicial y la revisada.
+
+plan_fields:
+  required:
+    - complexity.level
+    - complexity.score
+    - complexity.factors
+    - complexity.evidence
+    - complexity.unknown
+    - complexity.confirmation_required

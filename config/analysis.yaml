@@ -1,0 +1,42 @@
+schema_version: 1
+team: equipo
+default_scope: inventory
+allowed_scopes:
+  - inventory
+  - standard
+  - full
+  - targeted
+
+budget:
+  remaining_credits: 1800
+  monthly_limit: 1800
+  reserve: 300
+  usable_limit: 1500
+  max_per_repository: 700
+  max_per_batch: 900
+  stop_at_percent: 90
+  strong_model_max_percent: 40
+  strong_model_max_credits: 700
+  require_confirmation_above_credits: 80
+
+allocation:
+  extraction_economical_code: 500
+  documentation_economical_writing: 300
+  integration_strong_reasoning: 400
+  review_strong_reasoning: 300
+  reserve: 300
+
+execution:
+  read_only_repositories: true
+  continue_on_repository_error: true
+  allow_push: false
+  allow_merge: false
+  allow_auto_publish: false
+  autonomous_within_workspace: true
+  batch_independent_tasks: true
+  approval_required_for:
+    - strong_reasoning
+    - full_scope
+    - external_network_access
+    - writes_outside_results
+    - publication

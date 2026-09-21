@@ -1,0 +1,69 @@
+schema_version: 1
+language: es-CO
+format:
+  id: ASD-TSE-100
+  template: templates/asd-tse-100-es.md
+  strict_sections: true
+  preserve_unknowns: true
+  use_mermaid: true
+  include_evidence: true
+  include_confidence: true
+
+sections:
+  - id: control_documental
+    title: Control documental
+    required: true
+  - id: resumen
+    title: Resumen
+    required: true
+  - id: objetivo_alcance
+    title: Objetivo y alcance
+    required: true
+  - id: contexto
+    title: Contexto de la solución
+    required: true
+  - id: requisitos
+    title: Requisitos y capacidades
+    required: true
+  - id: arquitectura
+    title: Arquitectura de la solución
+    required: true
+  - id: responsabilidades
+    title: Responsabilidades por microservicio
+    required: true
+  - id: interfaces
+    title: Interfaces y contratos
+    required: true
+  - id: datos
+    title: Datos y persistencia
+    required: true
+  - id: flujos
+    title: Flujos funcionales y técnicos
+    required: true
+  - id: seguridad
+    title: Seguridad y configuración
+    required: true
+  - id: despliegue_operacion
+    title: Despliegue y operación
+    required: true
+  - id: pruebas
+    title: Pruebas y validación
+    required: true
+  - id: riesgos
+    title: Riesgos, limitaciones y desconocidos
+    required: true
+  - id: decisiones
+    title: Decisiones y recomendaciones
+    required: true
+  - id: evidencias
+    title: Evidencias y trazabilidad
+    required: true
+  - id: anexos
+    title: Anexos
+    required: false
+
+status:
+  generated: Generado automáticamente
+  review: Pendiente de revisión humana
+  approved: Aprobado por el equipo propietario
+  stale: Desactualizado frente al código analizado

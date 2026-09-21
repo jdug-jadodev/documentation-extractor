@@ -1,0 +1,16 @@
+run_id: example-inventory-001
+repository: ejemplo-servicio
+branch: master
+scope: inventory
+schema_version: 1
+status: pending
+validation:
+  schema: pending
+  references: pending
+  coverage: pending
+  human_review: pending
+budget:
+  estimated_credits: 0
+  consumed_credits: 0
+  input_tokens: 0
+  output_tokens: 0

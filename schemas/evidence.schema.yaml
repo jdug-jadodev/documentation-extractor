@@ -1,0 +1,8 @@
+schema_version: 1
+name: evidence
+required:
+  - file
+properties:
+  required: [file]
+  optional: [symbol, lines, excerpt_hash, note]
+  repository_path: relative_to_configured_repository

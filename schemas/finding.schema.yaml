@@ -1,0 +1,18 @@
+schema_version: 1
+name: finding
+required:
+  - id
+  - type
+  - category
+  - repository
+  - branch
+  - summary
+  - confidence
+  - evidence
+properties:
+  type: [fact, inference, unknown]
+  confidence: [high, medium, low]
+  status: [automated, review_required, human_validated, rejected]
+  evidence_item:
+    required: [file]
+    optional: [symbol, lines, excerpt_hash, note]

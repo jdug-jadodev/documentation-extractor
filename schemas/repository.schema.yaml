@@ -1,0 +1,12 @@
+schema_version: 1
+name: repository
+required:
+  - name
+  - url
+  - path
+  - branch
+  - enabled
+properties:
+  enabled: boolean
+  branch_default: master
+  owner: string

@@ -1,0 +1,42 @@
+schema_version: 1
+name: archify-adapter
+status: configured
+implementation:
+  provider: external_or_local
+  command: null
+  version: null
+  documentation: null
+
+integration:
+  skill: .github/skills/archify-documentation/SKILL.md
+  agent: documentation
+  mode: fallback
+  output_contract: archify-documentation
+  input_contract:
+    - findings.yaml
+    - relations.yaml
+    - review.yaml
+    - config/documentation.yaml
+    - templates/asd-tse-100-es.md
+  output_directory: results/runs/<run-id>/<repository>/
+
+modes:
+  fallback:
+    enabled: true
+    description: Generación documental local compatible cuando Archify no está disponible.
+  archify:
+    enabled: false
+    description: Ejecutar solo cuando el equipo configure una implementación y su contrato verificable.
+
+compatibility:
+  codex: supported_by_contract
+  claude_code: supported_by_contract
+  opencode: supported_by_contract
+  github_copilot: native_skill
+
+controls:
+  never_claim_execution_when_unavailable: true
+  preserve_evidence: true
+  preserve_unknowns: true
+  require_human_review: true
+  allow_auto_publish: false

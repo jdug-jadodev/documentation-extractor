@@ -1,0 +1,9 @@
+schema_version: 1
+name: message
+required:
+  - id
+  - channel
+  - evidence
+properties:
+  status: [automated, review_required, human_validated, stale]
+  delivery: [at_most_once, at_least_once, exactly_once, unknown]
