@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/task-packet.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "run_id", "task_id", "role", "operation", "request", "snapshots", "facts", "evidence", "graph_slice", "previous_findings", "conventions", "template_sections", "coverage", "unknowns", "required_output_schema", "limits"],
+  "properties": {
+    "schema_version": {"const": 3}, "run_id": {"type": "string"}, "task_id": {"type": "string"},
+    "role": {"enum": ["orchestrator", "inventory", "extraction", "integration", "documentation", "review", "proposal", "publication"]},
+    "operation": {"type": "string"}, "request": {"type": "string"}, "snapshots": {"type": "array"}, "facts": {"type": "array"}, "evidence": {"type": "array"}, "graph_slice": {"type": "object"}, "previous_findings": {"type": "array"}, "conventions": {"type": "array"}, "template_sections": {"type": "array", "items": {"type": "string"}}, "coverage": {"type": "object"}, "unknowns": {"type": "array", "items": {"type": "string"}}, "required_output_schema": {"type": "string"},
+    "limits": {"type": "object", "additionalProperties": false, "required": ["allow_source_access", "allow_publication", "max_input_bytes", "max_output_bytes"], "properties": {"allow_source_access": {"const": false}, "allow_publication": {"const": false}, "max_input_bytes": {"type": "integer", "maximum": 49152}, "max_output_bytes": {"type": "integer", "maximum": 131072}}}
+  }
+}

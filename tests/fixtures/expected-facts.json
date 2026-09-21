@@ -1,0 +1,12 @@
+{
+  "master": {
+    "endpoints": [
+      {"repository": "demo-productor", "method": "POST", "path": "/novedades"},
+      {"repository": "demo-productor", "method": "GET", "path": "/novedades/{id}"},
+      {"repository": "demo-consumidor", "method": "GET", "path": "/resumen/{id}"}
+    ],
+    "relations": [{"type": "calls_http", "from": "demo-consumidor", "to": "demo-productor", "environment": "demo"}]
+  },
+  "feature": {"endpoint_count": 4, "added": [{"method": "GET", "path": "/novedades/estado"}]},
+  "ai_invocations": 0
+}

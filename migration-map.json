@@ -1,0 +1,50 @@
+{
+  "schema_version": 3,
+  "created_at": "2026-09-21T00:00:00-05:00",
+  "updated_at": "2026-09-21T00:00:00-05:00",
+  "scope": "documentation-system-only",
+  "backup": ".knowledge/migration-backup/t01-baseline",
+  "workspace_status": "configuration_pending",
+  "preserve": [
+    { "path": "templates/asd-tse-100-es.md", "reason": "Plantilla ASD-TSE-100 obligatoria" },
+    { "path": ".github/skills/archify-documentation/SKILL.md", "reason": "Skill existente obligatoria" },
+    { "path": "agents/*.md", "reason": "Fuentes canónicas de los ocho roles" },
+    { "path": "schemas/v3/*.schema.json", "reason": "Contratos canónicos activos" }
+  ],
+  "migrated": [
+    { "from": "workspace-repos.yaml", "to": "knowledge.yaml", "result": "autoridad única sin rutas de aplicaciones heredadas" },
+    { "from": "config/*.yaml", "to": "knowledge.yaml + defaults TypeScript", "result": "completado" },
+    { "from": "tools/inventory.py", "to": "src/discovery/inventory.ts", "result": "portado, no invocado" },
+    { "from": "tools/*.ps1", "to": "src/**/*.ts + launchers", "result": "portado" },
+    { "from": "schemas/*.yaml", "to": "schemas/v3/*.schema.json", "result": "reemplazado" },
+    { "from": ".github/agents/orquestador.agent.md", "to": "entrada MCP + perfiles aislados", "result": "actualizado" }
+  ],
+  "retired_from_active_tree": [
+    "workspace-repos.yaml",
+    "proyecto-ia-integración.code-workspace",
+    "config/",
+    "tools/",
+    "results/",
+    "schemas/*.yaml",
+    "apis/",
+    "evidence/",
+    "flows/",
+    "manifests/",
+    "messages/",
+    "services/"
+  ],
+  "recovery": "Los originales permanecen exclusivamente en .knowledge/migration-backup/t01-baseline/.",
+  "missing": [
+    "SISTEMA-DOCUMENTACION-V4-NODE/03-QUE-NECESITO-DE-TI.md",
+    "application workspace (intentionally not provided yet)",
+    "verified Copilot client capability matrix",
+    "verified grammar compatibility results"
+  ],
+  "constraints": {
+    "application_roots_read": false,
+    "application_features_invented": false,
+    "tests_executed": false,
+    "ai_calls_executed": false,
+    "azure_enabled": false
+  }
+}

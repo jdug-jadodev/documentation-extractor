@@ -1,0 +1,26 @@
+{
+  "schema_version": 3,
+  "web_tree_sitter": "0.27.0",
+  "runtime": {
+    "file": "web-tree-sitter.wasm",
+    "sha256": "c03bccdc3b448a32848f5ae327e209c982bbb0840d43eec8bc2d5759544a1ed3",
+    "size": 209613,
+    "source": "npm:web-tree-sitter@0.27.0",
+    "license": "MIT",
+    "license_file": "../licenses/web-tree-sitter-LICENSE"
+  },
+  "grammars": [
+    {"language": "python", "file": "tree-sitter-python.wasm", "sha256": "2091d112a2989c54c2157a0a9a62c06d41a5ef3e40fd71f19cde7b4663bdd028", "size": 456587, "source": "npm:tree-sitter-wasm@2.0.2/python", "license": "MIT", "abi_min": 13, "abi_max": 15},
+    {"language": "c_sharp", "file": "tree-sitter-c_sharp.wasm", "sha256": "608208861b5cacee3805c486109e05cdfcf508988c303199cbba4628b8ed4151", "size": 5334256, "source": "npm:tree-sitter-wasm@2.0.2/c_sharp", "license": "MIT", "abi_min": 13, "abi_max": 15},
+    {"language": "java", "file": "tree-sitter-java.wasm", "sha256": "e430a1a344388d6d3bc9f87144dec0d204fca37fafe5f4ab23c51060972a2ac5", "size": 419586, "source": "npm:tree-sitter-wasm@2.0.2/java", "license": "MIT", "abi_min": 13, "abi_max": 15},
+    {"language": "typescript", "file": "tree-sitter-typescript.wasm", "sha256": "78a2710a7d0f60a8c9ab92cc6e961f76cf80b3d69690140eeca8a29eba9185db", "size": 1429139, "source": "npm:tree-sitter-wasm@2.0.2/typescript", "license": "MIT", "abi_min": 13, "abi_max": 15},
+    {"language": "tsx", "file": "tree-sitter-tsx.wasm", "sha256": "36d947d9f19043c1108f3f8f5cfa82c25ffd681694e76a164d8b35022ded1d40", "size": 1461283, "source": "npm:tree-sitter-wasm@2.0.2/tsx", "license": "MIT", "abi_min": 13, "abi_max": 15},
+    {"language": "javascript", "file": "tree-sitter-javascript.wasm", "sha256": "fc5362de9cacbfd6c6ee11e5bf144c7adbbf26ae3703eaaba916d4b0d78da76f", "size": 413013, "source": "npm:tree-sitter-wasm@2.0.2/javascript", "license": "MIT", "abi_min": 13, "abi_max": 15}
+  ],
+  "provenance": {
+    "package": "tree-sitter-wasm@2.0.2",
+    "signature_bundles": "Adjacent *.sigstore.json files",
+    "license_file": "../licenses/tree-sitter-wasm-LICENSE",
+    "load_compatibility": "pending_explicit_tests"
+  }
+}

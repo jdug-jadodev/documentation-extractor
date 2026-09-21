@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/fact.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "kind", "component_id", "value", "evidence_ids", "rule_id"],
+  "properties": {
+    "schema_version": {"const": 3}, "id": {"type": "string", "minLength": 1}, "kind": {"type": "string", "minLength": 1}, "component_id": {"type": "string", "minLength": 1},
+    "value": {}, "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "rule_id": {"type": "string", "minLength": 1}
+  }
+}

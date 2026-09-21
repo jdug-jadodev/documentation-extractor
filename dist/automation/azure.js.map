@@ -1,0 +1,1 @@
+{"version":3,"file":"azure.js","sourceRoot":"","sources":["../../src/automation/azure.ts"],"names":[],"mappings":"AAAA,MAAM,UAAU,qBAAqB,CAAC,UAAkB,EAAE,UAAkB;IAC1E,OAAO,8KAA8K,UAAU,CAAC,UAAU,CAAC,GAAG,EAAE,IAAI,CAAC,0BAA0B,UAAU,CAAC,UAAU,CAAC,GAAG,EAAE,IAAI,CAAC,qHAAqH,CAAC;AACvY,CAAC"}

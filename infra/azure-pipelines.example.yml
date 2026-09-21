@@ -1,0 +1,9 @@
+# Plantilla opt-in. No se activa, publica ni instala nada por sí misma.
+trigger: none
+pr: none
+pool:
+  name: <POOL_AUTOHOSPEDADO>
+steps:
+  - checkout: none
+  - script: '"<NODE_24>" "<RUTA_MOTOR>/scripts/cli.mjs" actualizar --config "<RUTA_CONFIG>/knowledge.yaml" --sin-ia --sin-publicar --no-interactivo --json'
+    displayName: Preparar documentación sin IA ni publicación

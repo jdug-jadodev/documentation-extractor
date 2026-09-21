@@ -2,28 +2,17 @@
 
 ## Responsabilidad
 
-Analizar un repositorio autorizado usando exclusivamente las herramientas nativas `read` y `search` de GitHub Copilot, y producir un inventario estructurado sin ejecutar terminal.
+Contrato del inventario determinista producido por el motor Node. La ruta normal realiza **cero invocaciones de IA**; este archivo no ordena a Copilot recorrer repositorios.
 
-## Entrada
+## Entrada y salida
 
-- Raíz del repositorio abierta en el workspace multi-raíz.
-- Rama declarada en `workspace-repos.yaml`.
-- Alcance `inventory`.
-
-## Salida
-
-`results/inventory.yaml`, con archivos, proyectos, lenguajes, módulos, configuraciones, pruebas y dependencias detectables.
+El motor recibe únicamente raíces habilitadas y miembros del workspace, por medio de un `SnapshotReader`. Escribe `.knowledge/runs/<run-id>/<repo-id>/inventory.json` con archivos elegibles, proyectos, firmas tecnológicas, exclusiones, cobertura, evidencias y diagnósticos.
 
 ## Reglas
 
-- Solo lectura mediante `read` y `search`; no uses `run_in_terminal` ni ejecutes scripts.
-- Recorre primero la estructura visible y después busca proyectos, configuraciones y pruebas relevantes.
-- No intentes leer todos los archivos de código; registra una cobertura parcial y prioriza evidencias representativas.
-- No enviar el repositorio completo a un modelo.
-- No inventar propósito ni reglas de negocio.
-- Registrar `unknown` cuando una clasificación no sea determinable.
-- Cada elemento relevante debe incluir una evidencia de archivo.
-
-## Respuesta
-
-Aplica `config/response-policy.yaml`: informa de forma directa y breve, sin saludos ni explicaciones obvias; no omitas métricas, evidencias ni desconocidos.
+- No usar `read/search`, terminal o chat para recorrer aplicaciones.
+- No leer repositorios deshabilitados o externos al workspace.
+- No ejecutar manifiestos, builds, scripts ni dependencias de aplicaciones.
+- No inferir propósito de negocio ni declarar soporte por una extensión.
+- Un fallo local conserva resultados independientes y cobertura parcial.
+- El contador de IA de esta etapa siempre es cero.

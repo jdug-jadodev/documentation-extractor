@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/graph.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "scenario_id", "snapshot_ids", "nodes", "edges"],
+  "properties": {
+    "schema_version": {"const": 3}, "scenario_id": {"type": "string"}, "snapshot_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "nodes": {"type": "array", "items": {"type": "object"}}, "edges": {"type": "array", "items": {"type": "object"}}
+  }
+}

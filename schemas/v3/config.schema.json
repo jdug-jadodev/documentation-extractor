@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/config.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "setup_status", "workspace_file", "vault_path", "repositories", "ai", "sharing", "azure"],
+  "properties": {
+    "schema_version": {"const": 3},
+    "setup_status": {"enum": ["configuration_pending", "configured"]},
+    "workspace_file": {"type": ["string", "null"]},
+    "vault_path": {"type": "string", "minLength": 1},
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "enabled", "default_branch"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
+          "path": {"type": "string", "minLength": 1},
+          "enabled": {"type": "boolean"},
+          "default_branch": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "ai": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "strong_model", "max_invocations"],
+      "properties": {
+        "provider": {"const": "copilot-cli"},
+        "model": {"type": ["string", "null"]},
+        "strong_model": {"type": ["string", "null"]},
+        "max_invocations": {"type": "integer", "minimum": 0, "maximum": 100}
+      }
+    },
+    "sharing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {"mode": {"enum": ["local", "folder", "export"]}}
+    },
+    "azure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {"enabled": {"type": "boolean"}, "repository_url": {"type": "string"}, "branch": {"type": "string"}}
+    },
+    "overrides": {"type": "object"}
+  }
+}

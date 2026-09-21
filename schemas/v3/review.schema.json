@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://docsys.local/schemas/v3/review.schema.json",
+  "type": "object", "additionalProperties": false, "required": ["schema_version", "run_id", "issues", "unresolved_questions", "status"],
+  "properties": {"schema_version": {"const": 3}, "run_id": {"type": "string"}, "issues": {"type": "array"}, "unresolved_questions": {"type": "array", "items": {"type": "string"}}, "status": {"enum": ["review", "review_required"]}}
+}

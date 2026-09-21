@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/agent-result.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "task_id", "role", "status", "payload", "limitations", "evidence_requests"],
+  "properties": {
+    "schema_version": {"const": 3}, "task_id": {"type": "string"}, "role": {"enum": ["orchestrator", "inventory", "extraction", "integration", "documentation", "review", "proposal", "publication"]}, "status": {"enum": ["ok", "needs_evidence", "review_required"]}, "payload": {"type": "object"}, "limitations": {"type": "array", "items": {"type": "string"}},
+    "evidence_requests": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["category", "question"], "properties": {"category": {"type": "string"}, "question": {"type": "string"}}}}
+  }
+}

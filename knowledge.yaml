@@ -1,0 +1,14 @@
+schema_version: 3
+setup_status: configuration_pending
+workspace_file: null
+vault_path: ./boveda
+repositories: []
+ai:
+  provider: copilot-cli
+  model: null
+  strong_model: null
+  max_invocations: 8
+sharing:
+  mode: local
+azure:
+  enabled: false

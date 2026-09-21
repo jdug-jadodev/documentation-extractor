@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "repository_id", "snapshot_id", "relative_path", "source_hash", "locator", "rule_id"],
+  "properties": {
+    "schema_version": {"const": 3}, "id": {"type": "string"}, "repository_id": {"type": "string"}, "snapshot_id": {"type": "string"},
+    "relative_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}, "source_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "locator": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"enum": ["bytes", "lines", "structured"]}, "start": {"type": "integer", "minimum": 0}, "end": {"type": "integer", "minimum": 0}, "key": {"type": "string"}}},
+    "rule_id": {"type": "string", "minLength": 1}
+  }
+}

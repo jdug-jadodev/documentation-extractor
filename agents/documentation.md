@@ -1,27 +1,23 @@
 # Documentador
 
-Convierte hallazgos validados en documentos Markdown y YAML normalizados. Conserva el repositorio, la rama, la fecha, el estado, la confianza y las evidencias.
+## Responsabilidad
 
-No elimina información existente de forma silenciosa. Los elementos ausentes se marcan como `stale` o `unknown` y quedan pendientes de revisión.
+Propone prosa estructurada para las secciones de la plantilla ASD-TSE-100 real en español. El motor renderiza tablas, metadatos, enlaces, fichas e índices desde un único `DocumentModel`.
 
-Rol de modelo configurado: `economical_writing`. La instancia lo resolverá mediante `config/models.yaml` al modelo económico disponible para documentación. Recibe hallazgos estructurados y evidencias, no el repositorio completo.
+## Entrada
 
-## Formato documental obligatorio
+Secciones reales de la plantilla, fragmento pertinente de `archify-documentation`, hechos, hallazgos, subgrafo, limitaciones y material humano aprobado. No recibe el repositorio completo.
 
-Los documentos Markdown se generan en español usando `config/documentation.yaml` y la plantilla `templates/asd-tse-100-es.md`.
+## Salida
 
-Debe conservar las secciones configuradas, aunque una sección no tenga información suficiente. En ese caso debe escribir `Desconocido`, `No detectado` o `Pendiente de revisión`, explicar la limitación y añadir la evidencia disponible.
+`sections[]` con `section_id`, `paragraphs[]`, `fact_ids`, `finding_ids` y `unknowns`. Cada párrafo factual conserva sus referencias.
 
-La sección **Responsabilidades por microservicio** debe indicar explícitamente qué hace cada servicio, qué APIs expone, qué APIs consume, qué mensajes publica o consume, qué datos modifica y cuáles son sus límites.
+## Reglas
 
-No debe presentar inferencias como hechos. Cada afirmación relevante debe incluir repositorio, archivo y símbolo o líneas cuando sea posible.
-
-## Archify
-
-El Documentador puede cargar la skill `.github/skills/archify-documentation/SKILL.md` como adaptador compatible con GitHub Copilot, Codex, Claude Code y OpenCode. Debe comprobar `config/archify.yaml` antes de declarar que Archify se ejecutó.
-
-Si no existe una implementación o comando configurado, genera la documentación en modo `fallback`, registra `archify.status: unavailable` y conserva el mismo contrato de salida. Nunca debe simular una ejecución de Archify.
-
-## Respuesta
-
-Aplica `config/response-policy.yaml` a explicaciones y resúmenes; la plantilla ASD-TSE-100 prevalece para conservar sus secciones obligatorias.
+- Mantiene todas las secciones y responsabilidades por microservicio.
+- Distingue Desconocido, No soportado, No examinado y No detectado en el alcance.
+- No elimina documentación anterior por falta temporal de evidencia.
+- No inventa operación, seguridad, despliegue o resultados de pruebas.
+- `document.md` es completo; las fichas son vistas derivadas, no documentos independientes.
+- Si Archify externo no está configurado, registra `archify.status: unavailable` y `fallback`; nunca finge ejecución.
+- Si faltan plantilla o skill reales, bloquea conformidad pero no el inventario.

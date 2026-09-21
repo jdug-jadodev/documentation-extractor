@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsys.local/schemas/v3/bundle.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "repository_id", "snapshot_id", "quality", "facts", "evidence", "diagnostics", "coverage", "content_hash"],
+  "properties": {
+    "schema_version": {"const": 3}, "repository_id": {"type": "string"}, "snapshot_id": {"type": "string"}, "quality": {"enum": ["complete", "partial", "unsupported", "failed"]},
+    "facts": {"type": "array", "items": {"$ref": "fact.schema.json"}}, "evidence": {"type": "array", "items": {"$ref": "evidence.schema.json"}}, "diagnostics": {"type": "array"}, "coverage": {"type": "object"}, "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

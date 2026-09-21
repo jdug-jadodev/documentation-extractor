@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://docsys.local/schemas/v3/approval.schema.json",
+  "type": "object", "additionalProperties": false, "required": ["schema_version", "run_id", "actor", "approved_at", "scope", "content_digest", "file_hashes", "exceptions"],
+  "properties": {"schema_version": {"const": 3}, "run_id": {"type": "string"}, "actor": {"type": "string"}, "approved_at": {"type": "string", "format": "date-time"}, "scope": {"type": "array", "items": {"type": "string"}}, "content_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "file_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, "exceptions": {"type": "array", "items": {"type": "string"}}}
+}

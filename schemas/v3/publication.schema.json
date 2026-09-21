@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://docsys.local/schemas/v3/publication.schema.json",
+  "type": "object", "additionalProperties": false, "required": ["schema_version", "edition_id", "run_id", "created_at", "previous_edition_id", "files", "complete"],
+  "properties": {"schema_version": {"const": 3}, "edition_id": {"type": "string"}, "run_id": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}, "previous_edition_id": {"type": ["string", "null"]}, "files": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "size"], "properties": {"path": {"type": "string"}, "sha256": {"type": "string"}, "size": {"type": "integer", "minimum": 0}}}, "complete": {"const": true}}
+}
