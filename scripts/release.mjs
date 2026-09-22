@@ -11,7 +11,7 @@ async function main() {
   if (evidence?.approved !== true) throw Object.assign(new Error("La evidencia de release no está aprobada."), { exitCode: 3 });
   const target = join(packageRoot, ".knowledge", "release", "sistema-documentacion-4.0.0");
   await mkdir(target, { recursive: true });
-  const entries = ["dist", "scripts", "assets", "schemas", "templates", "agents", ".github/skills/archify-documentation", "package.json", "package-lock.json", "pnpm-lock.yaml", "README.md", "INICIAR.cmd", "iniciar"];
+  const entries = ["dist", "scripts", "assets", "schemas", "templates", "agents", ".github/copilot-instructions.md", ".github/agents/orquestador.agent.md", ".github/skills/archify-documentation", "package.json", "package-lock.json", "pnpm-lock.yaml", "README.md", "INICIAR.cmd", "iniciar"];
   const manifest = [];
   for (const entry of entries) {
     await cp(join(packageRoot, entry), join(target, entry), { recursive: true, force: false, errorOnExist: true });

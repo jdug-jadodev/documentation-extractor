@@ -71,7 +71,7 @@ function classify(path: string): InventoryFile["classification"] {
 
 function inferTechnologies(path: string, signals: ReadonlySet<string>): string[] {
   const name = basename(path).toLocaleLowerCase("en-US");
-  if (name === "package.json") return ["nodejs", ...(signals.has("angular") ? ["angular"] : []), ...(signals.has("react") ? ["react"] : [])];
+  if (name === "package.json") return ["nodejs", ...(signals.has("angular") ? ["angular"] : []), ...(signals.has("react") ? ["react"] : []), ...(signals.has("express") ? ["express"] : [])];
   if (name === "pom.xml" || name.startsWith("build.gradle")) return ["java", ...(signals.has("spring") ? ["spring"] : [])];
   if (name === "pyproject.toml" || name === "requirements.txt") return ["python"];
   if (name.endsWith(".csproj")) return ["dotnet"];
@@ -89,6 +89,7 @@ function detectCandidateStacks(repositoryId: string, files: InventoryFile[], sig
     ["java-weblogic", ["java", "xml"], signals.has("jee")],
     ["js-angular", ["typescript"], signals.has("angular")],
     ["js-react", ["typescript", "tsx", "javascript"], signals.has("react")],
+    ["node-express", ["typescript", "javascript"], signals.has("express")],
   ];
   return mappings.flatMap(([plugin, languages, detected]) => {
     if (!detected) return [];
@@ -105,9 +106,10 @@ function isManifest(path: string): boolean {
 function collectTechnologySignals(path: string, source: string, signals: Set<string>): void {
   const name = basename(path).toLocaleLowerCase("en-US");
   const sample = source.slice(0, 512 * 1024).toLocaleLowerCase("en-US");
-  if (name.endsWith(".csproj") || /\bmicrosoft\.aspnetcore\b/u.test(sample)) signals.add("dotnet");
+  if (name.endsWith(".csproj") || /\bmicrosoft\.aspnetcore\b|\b(?:app|group)\.map(?:get|post|put|patch|delete)\s*\(/u.test(sample)) signals.add("dotnet");
   if (name === "angular.json" || /["']@angular\/core["']/u.test(sample)) signals.add("angular");
   if (/["'](?:react|react-dom)["']/u.test(sample) || /\bfrom\s+["']react["']/u.test(sample)) signals.add("react");
+  if ((name === "package.json" && /["']express["']\s*:/u.test(sample)) || /\bfrom\s+["']express["']|\brequire\s*\(\s*["']express["']/u.test(sample)) signals.add("express");
   if (/\borg\.springframework\b|\bspring-boot\b/u.test(sample)) signals.add("spring");
   if (["web.xml", "weblogic.xml", "application.xml"].includes(name) || /\b(?:jakarta|javax)\.(?:ws\.rs|ejb|jms)\b/u.test(sample)) signals.add("jee");
 }

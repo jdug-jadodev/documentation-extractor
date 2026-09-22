@@ -1,52 +1,31 @@
 # Pendientes exactos
 
-Estado de todos los casos: **pendiente; no ejecutado**.
+## Ya ejecutado
 
-## Aceptaciones funcionales
+- Suite automatizada disponible: 34/34 superadas.
+- Tipos y compilación del motor.
+- Configuración separada de motor, workspace, estado privado y bóveda.
+- Protocolo MCP `stdio`, listado de siete herramientas y consultas de estado.
+- Run real de tres repositorios en `main`, sin checkout ni ejecución de aplicaciones.
+- Consultas de endpoints, relaciones, flujo y propuesta `review_required`.
+- Sesión real de GitHub Copilot confirmada por el usuario: estado, análisis explícito y consultas sobre un run existente, sin publicación ni modificación de aplicaciones.
 
-P01–P112: pendientes.
+## Aceptaciones aún pendientes
 
-## Aceptaciones de migración Node
+- P01–P112 y N01–N16 permanecen como `pending` en `tests/acceptance-catalog.ts` hasta ejecutar la campaña completa criterio por criterio. La prueba de que el catálogo contiene 128 IDs no equivale a aprobarlos.
+- Demo sintética y recorrido de revisión/publicación en Obsidian.
+- Completar y registrar por separado GitHub Copilot CLI, VS Code e IntelliJ; ya se comprobó una sesión real, pero falta identificar formalmente su superficie/versión y cubrir las otras variantes.
+- Cualquier llamada real a Copilot y sus casos de presupuesto/cancelación.
+- Matriz Windows/Linux/macOS completa y lanzadores desde instalaciones externas.
+- Pruebas adversariales, rendimiento, caché, interrupción, rollback y recuperación.
+- Azure Pipelines/Azure Repo y tareas programadas, solo si se activan expresamente.
+- Release final mediante `scripts/release.mjs` cuando exista evidencia de aceptación aprobada.
 
-N01–N16: pendientes.
+## Pendientes funcionales observados
 
-Los criterios completos permanecen en `SISTEMA-DOCUMENTACION-V4-NODE/01-PLAN-FINAL-DESARROLLO.md`; `tests/acceptance-catalog.ts` mantiene cada caso como `pending`.
-
-## Pruebas adicionales escritas
-
-- Escenario de varios repositorios en un mismo run.
-- Camino dirigido con estado conservador.
-- Destino no resuelto sin invención.
-- Filtrado de relaciones incidentes.
-- Superficie MCP de operaciones bajo demanda.
-- Ausencia de herramientas MCP para aprobar o publicar.
-
-## Ejecuciones que requieren autorización
-
-1. Suite automatizada completa y evidencia P01–P112/N01–N16.
-2. Pruebas adicionales de multirrepositorio y MCP.
-3. Demo sintética y recorrido extremo a extremo sin IA.
-4. Carga real de gramáticas WASM, incompatibilidad localizada y cancelación de worker.
-5. `npm start`, `INICIAR.cmd` e `iniciar` desde rutas externas con espacios y tildes.
-6. Revisión de ASD-TSE-100, enlaces, Mermaid y navegación en Obsidian.
-7. Matriz Windows x64, Linux x64 y macOS Intel/Apple Silicon disponible.
-8. Copilot CLI, perfiles, presupuesto, cancelación y resultados reales; ninguna llamada sin permiso específico.
-9. MCP en Copilot CLI, VS Code e IntelliJ, incluido el aislamiento de herramientas.
-10. Azure Pipelines/Azure Repo, solo si el usuario los elige.
-11. Tareas programadas, solo con autorización separada.
-12. Seguridad adversarial, rendimiento, caché, interrupción de publicación y recuperación.
-13. Release mediante `scripts/release.mjs` cuando exista evidencia aprobada.
-
-## Pendientes que requieren el workspace futuro
-
-1. Importar el `.code-workspace` y confirmar cada raíz; ninguna raíz nueva se habilita por defecto.
-2. Ejecutar preflight de Git, pertenencia, permisos, refs y alias.
-3. Identificar stacks reales sin extrapolarlos desde fixtures.
-4. Ejecutar un run individual y uno multirrepositorio.
-5. Comprobar relaciones, flujo, comparación y propuesta sobre evidencia real.
-6. Ejecutar piloto y medir cobertura.
-7. Confirmar que repositorios deshabilitados siguen excluidos.
-8. Completar T54–T56 y verificar la recuperación de los archivos heredados retirados desde el respaldo privado.
+- Los tres bundles reales tienen calidad `partial`; ampliar parsers solo a partir de capacidades comprobadas en esos repositorios.
+- La relación `estraviado → login-estraviado` es `candidate` porque la ruta coincide, pero la vinculación semántica del montaje Express requiere revisión humana o un alias aprobado.
+- Revisar manualmente en Obsidian la estructura ASD-TSE-100 antes de cualquier publicación.
 
 ## Faltante documental
 

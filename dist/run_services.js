@@ -6,7 +6,7 @@ import { atomicWrite } from "./platform/fs.js";
 import { stableId } from "./platform/hash.js";
 import { queryFacts, renderFactTable } from "./query.js";
 export async function loadRunArtifacts(config, runId) {
-    const root = validatedRunRoot(config.config_root, runId);
+    const root = validatedRunRoot(config.state_root, runId);
     const run = await readJson(join(root, "run.json"));
     const graph = await readJson(join(root, "graph.json"));
     const facts = [];
@@ -104,10 +104,10 @@ export async function prepareProposal(config, runId, type, request, humanRequire
     await atomicWrite(markdownPath, renderProposal(proposalId, runId, proposal));
     return { proposal_id: proposalId, status: "review_required", json_path: jsonPath, markdown_path: markdownPath, proposal };
 }
-export function validatedRunRoot(configRoot, runId) {
+export function validatedRunRoot(stateRoot, runId) {
     if (!/^run-[A-Za-z0-9._-]+$/u.test(runId))
         throw new Error("run_id inválido.");
-    return join(configRoot, ".knowledge", "runs", runId);
+    return join(stateRoot, "runs", runId);
 }
 function resolveNode(graph, input) {
     const normalized = input.trim().toLocaleLowerCase("en-US");

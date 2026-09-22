@@ -9,6 +9,7 @@
     "setup_status": {"enum": ["configuration_pending", "configured"]},
     "workspace_file": {"type": ["string", "null"]},
     "vault_path": {"type": "string", "minLength": 1},
+    "state_path": {"type": "string", "minLength": 1},
     "repositories": {
       "type": "array",
       "items": {

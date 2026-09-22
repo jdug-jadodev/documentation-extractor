@@ -10,6 +10,7 @@ export interface KnowledgeConfiguration {
     setup_status: "configuration_pending" | "configured";
     workspace_file: string | null;
     vault_path: string;
+    state_path?: string;
     repositories: RepositoryConfiguration[];
     ai: {
         provider: "copilot-cli";
@@ -30,6 +31,7 @@ export interface KnowledgeConfiguration {
 export interface EffectiveConfiguration extends KnowledgeConfiguration {
     config_path: string;
     config_root: string;
+    state_root: string;
     workspace_path: string | null;
     vault_root: string;
     repositories: Array<RepositoryConfiguration & {

@@ -26,7 +26,7 @@ Mientras `knowledge.yaml` tenga `setup_status: configuration_pending`, ningún c
 
 ## Datos privados
 
-Cada ejecución vive en `.knowledge/runs/<run-id>/`. Un run multirrepositorio conserva el snapshot y bundle separado de cada repo, además de un `scenario.json` y `graph.json` comunes. `.knowledge` no sale en una edición.
+Cada ejecución vive en el `state_path` privado de la instalación, bajo `runs/<run-id>/`. Un run multirrepositorio conserva el snapshot y bundle separado de cada repo, además de un `scenario.json` y `graph.json` comunes. El estado privado no se guarda en el workspace ni sale en una edición.
 
 ## Ocho roles y skill
 
@@ -34,7 +34,7 @@ Se conservan Orquestador, Inventariador, Extractor, Integrador, Documentador, Re
 
 ## Copilot
 
-El agente de entrada solo puede usar `docsys_*`. Puede consultar estado, listar repositorios, preparar un análisis solicitado, explicar relaciones, trazar flujos, consultar hechos y preparar propuestas. No puede aprobar ni publicar. Desde un workspace de aplicaciones no se copia `.github`: se registra el MCP como configuración de usuario y, opcionalmente, el perfil del Orquestador como agente personal.
+El agente de entrada solo puede usar `docsys_*`. Puede consultar estado, listar repositorios, preparar un análisis solicitado, explicar relaciones, trazar flujos, consultar hechos y preparar propuestas. No puede aprobar ni publicar. La carpeta contenedora del `.code-workspace` recibe solo la integración `.github` y `.vscode/mcp.json`; el motor y los repositorios de aplicaciones permanecen separados.
 
 ## Obsidian y compartición
 
@@ -42,4 +42,4 @@ La revisión genera una bóveda candidata. Una acción humana crea un recibo lig
 
 ## Estado de validación
 
-La compilación no equivale a validación. Ninguna prueba, demo, ejecución del sistema, piloto, apertura de Obsidian o llamada a Copilot ha sido realizada.
+La compilación, 34 pruebas automatizadas y un recorrido MCP real en Windows se completaron. El recorrido extrajo tres repositorios locales por sus commits `main`, sin ejecutar aplicaciones, y probó consulta, relación, flujo y propuesta. Siguen pendientes la campaña completa P/N, Copilot real, apertura/publicación en Obsidian, Azure y la matriz Linux/macOS.

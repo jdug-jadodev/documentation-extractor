@@ -3,6 +3,7 @@ import { createJavaSpringPlugin } from "./java_spring/index.js";
 import { createJavaWeblogicPlugin } from "./java_weblogic/index.js";
 import { createAngularPlugin } from "./js_angular/index.js";
 import { createReactPlugin } from "./js_react/index.js";
+import { createNodeExpressPlugin } from "./node_express/index.js";
 import { createPythonPlugin } from "./python/index.js";
 export class PluginRegistry {
     #plugins = new Map();
@@ -16,6 +17,6 @@ export class PluginRegistry {
     require(id) { const plugin = this.get(id); if (!plugin)
         throw new Error(`Capacidad no soportada: plugin ${id} no instalado.`); return plugin; }
 }
-export function builtInPlugins() { return [createDotnetPlugin(), createJavaSpringPlugin(), createJavaWeblogicPlugin(), createAngularPlugin(), createReactPlugin(), createPythonPlugin()]; }
+export function builtInPlugins() { return [createDotnetPlugin(), createJavaSpringPlugin(), createJavaWeblogicPlugin(), createAngularPlugin(), createReactPlugin(), createNodeExpressPlugin(), createPythonPlugin()]; }
 export function capabilityMatrix(registry = new PluginRegistry()) { return { schema_version: 3, plugins: registry.list().map((plugin) => ({ id: plugin.id, version: plugin.version, languages: plugin.supported_languages, capabilities: plugin.capabilities, rules: plugin.rule_versions })) }; }
 //# sourceMappingURL=registry.js.map

@@ -1,11 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { ContractValidator, ContractValidationError } from "../src/contracts/validator.js";
 import { ACCEPTANCE_CASES } from "./acceptance-catalog.js";
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const root = process.cwd();
 
 test("P05/N14: contratos v3 válidos y campos desconocidos rechazados", async () => {
   const validator = await ContractValidator.create(root);

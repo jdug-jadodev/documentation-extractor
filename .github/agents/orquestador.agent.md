@@ -1,7 +1,6 @@
 ---
 name: docsys-orchestrator-entry
 description: Entrada conversacional al sistema local de documentación; usa exclusivamente sus herramientas docsys.
-modelPolicy: required
 tools:
   - sistema-documentacion/docsys_status
   - sistema-documentacion/docsys_list_repositories

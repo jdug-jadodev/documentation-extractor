@@ -18,21 +18,26 @@ No es un daemon permanente. Se inicia cuando el menú, la CLI o Copilot solicita
 ## 2. Qué se queda en cada lugar
 
 ```text
-C:\Herramientas\documentation-extractor\   <- todo el sistema
-C:\Workspaces\equipo.code-workspace        <- lista de repositorios
+C:\Herramientas\documentation-extractor\   <- motor descargado de Azure
+C:\Workspaces\equipo\equipo.code-workspace <- lista de repositorios
+C:\Workspaces\equipo\knowledge.yaml        <- autorización de este workspace
+C:\Workspaces\equipo\.vscode\mcp.json     <- conexión MCP
+C:\Workspaces\equipo\.mcp.json             <- conexión MCP portátil/CLI
+C:\Workspaces\equipo\.github\             <- agente, instrucciones y skill
 C:\Proyectos\frontend\                     <- aplicación
 C:\Proyectos\pedidos-api\                  <- aplicación
 C:\Proyectos\pagos-api\                    <- aplicación
 C:\Documentacion\Boveda-Obsidian\          <- documentación publicada
 ```
 
-Toda la carpeta `.github`, los agentes, la skill, los parsers y `dist` se quedan dentro de `documentation-extractor`. No se copia `.github` a los repositorios de aplicaciones.
+El motor, los ocho roles internos, los parsers, `dist` y los runs privados se quedan dentro de `documentation-extractor`. En la carpeta contenedora del workspace se instalan únicamente `.vscode/mcp.json`, `knowledge.yaml` y los archivos `.github` necesarios para que Copilot descubra el agente y la skill. No se escribe dentro de los repositorios de aplicaciones.
 
-El workspace contiene solamente las aplicaciones:
+El workspace contiene una carpeta de control y las aplicaciones. La carpeta de control permite descubrir `.github` y MCP, pero no se incluye entre los repositorios autorizados:
 
 ```json
 {
   "folders": [
+    { "name": "documentacion-workspace", "path": "." },
     { "name": "frontend", "path": "C:\\Proyectos\\frontend" },
     { "name": "pedidos-api", "path": "C:\\Proyectos\\pedidos-api" },
     { "name": "pagos-api", "path": "C:\\Proyectos\\pagos-api" }
@@ -61,7 +66,17 @@ Con IntelliJ se puede crear manualmente el mismo JSON. IntelliJ no necesita abri
 2. Abrirla como bóveda en Obsidian.
 3. No instalar plugins obligatorios.
 
-### Iniciar
+### Instalar la integración en el workspace
+
+Desde la carpeta del motor:
+
+```powershell
+pnpm workspace:install -- --workspace C:\Workspaces\equipo\equipo.code-workspace --vault C:\Documentacion\Boveda-Obsidian --repository-ids frontend,pedidos-api,pagos-api --branch main
+```
+
+Este comando no copia el motor ni analiza repositorios. Genera la configuración, añade la carpeta de control como primera raíz si falta y deja el estado privado apuntando a la instalación del motor. Ejecutarlo nuevamente con los mismos argumentos es idempotente.
+
+### Iniciar manualmente
 
 Windows:
 
@@ -77,7 +92,7 @@ Mientras no se haya proporcionado y configurado el workspace, el sistema muestra
 
 ## 4. Configurar el workspace
 
-En el menú seleccionar **Configurar** e indicar:
+El instalador anterior deja el workspace configurado. Alternativamente, en el menú se puede seleccionar **Configurar** e indicar:
 
 1. Ruta del `.code-workspace`.
 2. ID estable de cada repositorio.
@@ -229,8 +244,8 @@ La conexión es local por MCP `stdio`: Copilot inicia `scripts/mcp.mjs` como pro
 Generar la configuración exacta para esta instalación:
 
 ```powershell
-pnpm copilot:config ide
-pnpm copilot:config cli
+pnpm copilot:config ide -- --config C:\Workspaces\equipo\knowledge.yaml
+pnpm copilot:config cli -- --config C:\Workspaces\equipo\knowledge.yaml
 ```
 
 El primer comando imprime el formato `servers` usado por VS Code/JetBrains. El segundo imprime el formato `mcpServers`, con `tools`, usado por Copilot CLI. No son intercambiables. El formato de IDE es similar a este:
@@ -244,7 +259,7 @@ El primer comando imprime el formato `servers` usado por VS Code/JetBrains. El s
       "args": [
         "C:\\Herramientas\\documentation-extractor\\scripts\\mcp.mjs",
         "--config",
-        "C:\\Herramientas\\documentation-extractor\\knowledge.yaml"
+        "C:\\Workspaces\\equipo\\knowledge.yaml"
       ]
     }
   }
@@ -253,17 +268,17 @@ El primer comando imprime el formato `servers` usado por VS Code/JetBrains. El s
 
 ### VS Code
 
-1. Abrir la configuración MCP de usuario con **MCP: Add Server** o **MCP: Open User Configuration**.
-2. Agregar el servidor `sistema-documentacion` con los valores impresos.
+1. Abrir el archivo `.code-workspace` desde su carpeta contenedora.
+2. VS Code detecta `.vscode/mcp.json`; confirmar el inicio del servidor `sistema-documentacion` cuando lo solicite.
 3. Iniciar el servidor desde la vista MCP cuando se quiera usar.
 4. En Copilot Chat pedir primero: `Consulta el estado de sistema-documentacion`.
 
-Usar configuración de usuario evita agregar archivos al workspace de aplicaciones.
+El archivo se encuentra junto al `.code-workspace`, no dentro de ninguna aplicación.
 
 ### Copilot CLI
 
-1. Ejecutar `pnpm copilot:config cli` y agregar esa salida al archivo personal `~/.copilot/mcp-config.json`; también se puede usar `copilot mcp add sistema-documentacion -- <node> <ruta-a-scripts/mcp.mjs> --config <ruta-a-knowledge.yaml>`.
-2. Abrir Copilot CLI desde el workspace de aplicaciones.
+1. Abrir Copilot CLI desde la carpeta de control; el instalador deja allí `.mcp.json`. Como alternativa personal, usar `pnpm copilot:config cli -- --config <ruta-a-knowledge.yaml>` y agregar la salida a `~/.copilot/mcp-config.json`.
+2. Confiar explícitamente en la carpeta/configuración cuando el cliente lo solicite.
 3. Comprobar que aparecen las herramientas `docsys_*`.
 4. Pedir una operación concreta, por ejemplo: `Analiza pedidos-api y pagos-api en main, sin publicar`.
 
@@ -278,7 +293,7 @@ Los nombres exactos de los menús pueden cambiar entre versiones del plugin, per
 
 ### Agente conversacional opcional
 
-El archivo `.github/agents/orquestador.agent.md` limita a Copilot a las herramientas `docsys_*`. Cuando se abre este repositorio, Copilot puede descubrirlo como agente del proyecto. Si se quiere usar desde cualquier workspace, se copia **solo ese perfil** al directorio personal `~/.copilot/agents/`; no se copia toda `.github` a las aplicaciones.
+El instalador coloca `.github/agents/orquestador.agent.md`, las instrucciones y `archify-documentation` junto al `.code-workspace`. Copilot descubre allí la entrada conversacional, que está limitada a las herramientas `docsys_*`. Los archivos no se copian dentro de las aplicaciones.
 
 El motor, no Copilot, decide qué responsabilidades internas intervienen. Los especialistas interpretativos se generan en un runtime aislado con `tools: []`; Inventariador y Publicador son código. La skill `archify-documentation` se conserva dentro del sistema y se empaqueta en ese runtime cuando se generan perfiles. Por eso las aplicaciones no necesitan saber qué skill o agente elegir.
 
@@ -318,13 +333,12 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 
 ## 15. Lo que sigue pendiente antes de usarlo como validado
 
-- Entregar y configurar el workspace real.
-- Autorizar y ejecutar la suite automatizada.
-- Autorizar la demo y el piloto real.
+- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 34/34.
+- Autorizar la demo sintética si se desea ejecutarla.
 - Verificar VS Code, Copilot CLI e IntelliJ con sus versiones instaladas.
 - Autorizar cualquier llamada real a Copilot.
 - Revisar Obsidian manualmente.
 - Verificar Windows, Linux y macOS.
 - Activar Azure solamente si se decide usarlo.
 
-Hasta entonces, el estado correcto es: **Implementación preparada; pendiente de pruebas**.
+Estado actual: **motor y MCP probados en Windows; validación completa pendiente**.

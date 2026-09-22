@@ -235,7 +235,7 @@ async function reviewRun(configPath, validator, runId) {
     return { status: "review", run_id: runId, candidate_vault: candidate, issues: issues.length, model_status: model.status, repository_count: artifacts.snapshots.length };
 }
 async function approveRun(configPath, validator, runId, nonInteractive) { if (nonInteractive || !stdin.isTTY)
-    throw Object.assign(new Error("Aprobar requiere acción humana interactiva."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator), root = validatedRunRoot(config.config_root, runId); const review = await readJson(join(root, "review.json")); if (review.issues.some((item) => item.severity === "security" || item.severity === "error"))
+    throw Object.assign(new Error("Aprobar requiere acción humana interactiva."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator), root = validatedRunRoot(config.state_root, runId); const review = await readJson(join(root, "review.json")); if (review.issues.some((item) => item.severity === "security" || item.severity === "error"))
     throw Object.assign(new Error("La revisión contiene bloqueos no anulables."), { exitCode: 4 }); const rl = createInterface({ input: stdin, output: stdout }); try {
     const actor = (await rl.question("Actor local que revisó el candidato: ")).trim();
     const confirmed = /^s(i)?$/iu.test((await rl.question("¿Aprobar exactamente los hashes mostrados? [s/N]: ")).trim());
@@ -248,12 +248,12 @@ async function approveRun(configPath, validator, runId, nonInteractive) { if (no
 finally {
     rl.close();
 } }
-async function publishRun(configPath, validator, runId) { const config = await loadConfiguration(configPath, validator), root = validatedRunRoot(config.config_root, runId); const receipt = await readJson(join(root, "approval.json")); return await new LocalPublicationTarget(config.vault_root, "local-primary").publish(join(root, "candidate-vault"), receipt, {}); }
+async function publishRun(configPath, validator, runId) { const config = await loadConfiguration(configPath, validator), root = validatedRunRoot(config.state_root, runId); const receipt = await readJson(join(root, "approval.json")); return await new LocalPublicationTarget(config.vault_root, "local-primary").publish(join(root, "candidate-vault"), receipt, {}); }
 async function queryRun(configPath, validator, categoryInput, values) { const runId = requiredString(values.run, "--run"); const config = await loadConfiguration(configPath, validator); const artifacts = await loadRunArtifacts(config, runId); const repo = optionalString(values.repo); const category = parseQueryCategory(categoryInput); const result = queryRunArtifacts(artifacts, category, { ...(repo ? { repositoryId: repo, componentId: repo } : {}), limit: numberOption(values.limit, 100), offset: numberOption(values.offset, 0) }); return { ...result, table: renderRunQueryTable(category, result), run_id: runId, repository_id: repo ?? null, ai_invocations: 0 }; }
 async function shareEdition(configPath, validator, values) {
     const config = await loadConfiguration(configPath, validator), edition = requiredString(values.edicion, "--edicion"), destination = requiredString(values.destino, "--destino");
     const manifest = await readJson(join(config.vault_root, "Publicaciones", edition, "edicion.json"));
-    const sourceRun = await readJson(join(validatedRunRoot(config.config_root, manifest.run_id), "run.json"));
+    const sourceRun = await readJson(join(validatedRunRoot(config.state_root, manifest.run_id), "run.json"));
     if (sourceRun.snapshots.some((snapshot) => snapshot.dirty))
         throw Object.assign(new Error("Una edición basada en cambios locales no puede compartirse. Cree un commit y una revisión nueva."), { exitCode: 4 });
     return destination.toLocaleLowerCase("en-US").endsWith(".zip")
@@ -270,7 +270,7 @@ async function restoreEdition(configPath, validator, edition, nonInteractive) { 
 finally {
     rl.close();
 } }
-async function readRun(configPath, validator, runId, file) { const config = await loadConfiguration(configPath, validator); return await readJson(join(validatedRunRoot(config.config_root, runId), file)); }
+async function readRun(configPath, validator, runId, file) { const config = await loadConfiguration(configPath, validator); return await readJson(join(validatedRunRoot(config.state_root, runId), file)); }
 async function resumeStatus(configPath, validator, runId) { const run = await readRun(configPath, validator, runId, "run.json"); const pending = run.tasks?.filter((task) => !["completed", "cached"].includes(task.status)) ?? []; return { status: pending.length === 0 ? "review" : "review_required", run_id: runId, pending_tasks: pending, message: pending.length === 0 ? "No hay etapas deterministas por repetir." : "Reanude solo después de resolver los prerrequisitos indicados." }; }
 function parseList(value) { const items = [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]; if (items.length === 0)
     throw new Error("La lista de repositorios está vacía."); return items; }

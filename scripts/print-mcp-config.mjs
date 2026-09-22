@@ -1,11 +1,13 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { packageRoot } from "./shared.mjs";
 
 const client = process.argv[2] ?? "ide";
+const configIndex = process.argv.indexOf("--config");
+const configPath = configIndex >= 0 && process.argv[configIndex + 1] ? resolve(process.argv[configIndex + 1]) : join(packageRoot, "knowledge.yaml");
 const server = {
   type: client === "cli" ? "local" : "stdio",
   command: process.execPath,
-  args: [join(packageRoot, "scripts", "mcp.mjs"), "--config", join(packageRoot, "knowledge.yaml")],
+  args: [join(packageRoot, "scripts", "mcp.mjs"), "--config", configPath],
 };
 
 if (client === "cli") {

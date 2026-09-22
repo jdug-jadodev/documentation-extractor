@@ -73,4 +73,4 @@ export declare function prepareProposal(config: EffectiveConfiguration, runId: s
     markdown_path: string;
     proposal: ProposalModel;
 }>;
-export declare function validatedRunRoot(configRoot: string, runId: string): string;
+export declare function validatedRunRoot(stateRoot: string, runId: string): string;

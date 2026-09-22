@@ -17,7 +17,7 @@ async function main() {
   await rm(output, { recursive: true, force: true });
   await run(process.execPath, [join(packageRoot, "node_modules", "typescript", "bin", "tsc"), "-p", "tsconfig.test.json"]);
   const testFiles = [
-    "contracts.test.js", "config.test.js", "migration.test.js", "workspace.test.js", "snapshots.test.js", "inventory.test.js",
+    "contracts.test.js", "config.test.js", "config-state.test.js", "migration.test.js", "workspace.test.js", "snapshots.test.js", "inventory.test.js",
     "extractors.test.js", "correlation.test.js", "run-services.test.js", "multi-repository-contract.test.js", "ai.test.js", "documentation.test.js", "publication.test.js", "cli.test.js", "security.test.js"
   ].map((name) => join(output, "tests", name));
   await run(process.execPath, ["--test", ...testFiles]);

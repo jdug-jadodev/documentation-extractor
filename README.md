@@ -4,9 +4,9 @@ Motor local y determinista que extrae hechos de repositorios autorizados, correl
 
 ## Estado
 
-El motor está implementado en `src/`. Las pruebas P01–P112 y N01–N16, además de las pruebas nuevas de escenario multirrepositorio y MCP, están escritas pero no se han ejecutado por instrucción del usuario. Tampoco se han ejecutado la demo, el sistema, un análisis, Copilot, Obsidian ni Azure.
+El motor está implementado en `src/`. La suite automatizada disponible pasa 34/34 y el servidor MCP se probó por `stdio` sobre un workspace real de tres repositorios. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado Copilot real, Obsidian, Azure ni la matriz Linux/macOS.
 
-El workspace de aplicaciones no ha sido proporcionado. `knowledge.yaml` conserva `setup_status: configuration_pending`, `workspace_file: null` y `repositories: []`. En este estado ninguna entrada inicia análisis automáticos.
+La instalación del motor conserva su `knowledge.yaml` en `configuration_pending`. Cada workspace recibe su propia configuración e integración; los runs privados permanecen en el motor y la bóveda Obsidian es una tercera ubicación separada. Ninguna entrada inicia análisis automáticamente.
 
 ## Requisitos
 
@@ -64,7 +64,13 @@ pnpm mcp
 
 `copilot:config ide` imprime el formato `servers` para VS Code/IntelliJ; `copilot:config cli` imprime `mcpServers` para Copilot CLI. Esos clientes inician `mcp` por `stdio` cuando lo necesitan; no es un daemon permanente. El conector ofrece estado, lista de repositorios, análisis explícito, relaciones, flujos, consultas y propuestas. No ofrece aprobación ni publicación.
 
-La carpeta `.github` permanece en este proyecto. No se copia a las aplicaciones. El perfil de entrada puede instalarse opcionalmente como agente personal; el motor conserva internamente los ocho roles y la skill `archify-documentation`.
+Para preparar un workspace sin copiar el motor dentro de él:
+
+```powershell
+pnpm workspace:install -- --workspace C:\ruta\equipo.code-workspace --vault C:\ruta\boveda-obsidian --repository-ids repo-a,repo-b --branch main
+```
+
+El instalador coloca en la carpeta contenedora del workspace únicamente `knowledge.yaml`, `.vscode/mcp.json`, `.mcp.json` y los archivos `.github` de integración. También incorpora esa carpeta de control como primera raíz del workspace para que los clientes descubran la configuración; no la autoriza como repositorio analizable ni escribe dentro de las aplicaciones. El motor conserva sus ocho roles, parsers, binarios y estado privado.
 
 ## Arquitectura
 

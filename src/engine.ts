@@ -86,7 +86,7 @@ export async function runDeterministicScenario(input: {
   const graph = buildGraph(extractions.flatMap((item) => item.bundle.facts), scenario);
   const suffix = repositoryIds.length === 1 ? repositoryIds[0]! : `scenario-${stableId(repositoryIds.join("\u0000")).slice(0, 10)}`;
   const runId = `run-${new Date().toISOString().replace(/[:.]/gu, "-")}-${suffix}`;
-  const runRoot = join(config.config_root, ".knowledge", "runs", runId);
+  const runRoot = join(config.state_root, "runs", runId);
   await mkdir(runRoot, { recursive: true });
   await atomicWrite(join(runRoot, "workspace.json"), `${JSON.stringify(report, null, 2)}\n`);
   await atomicWrite(join(runRoot, "scenario.json"), `${JSON.stringify(scenario, null, 2)}\n`);

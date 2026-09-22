@@ -30,7 +30,7 @@ export interface FlowTrace {
 }
 
 export async function loadRunArtifacts(config: EffectiveConfiguration, runId: string): Promise<RunArtifacts> {
-  const root = validatedRunRoot(config.config_root, runId);
+  const root = validatedRunRoot(config.state_root, runId);
   const run = await readJson<{ snapshots: Snapshot[] }>(join(root, "run.json"));
   const graph = await readJson<KnowledgeGraph>(join(root, "graph.json"));
   const facts: Fact[] = [];
@@ -128,9 +128,9 @@ export async function prepareProposal(config: EffectiveConfiguration, runId: str
   return { proposal_id: proposalId, status: "review_required", json_path: jsonPath, markdown_path: markdownPath, proposal };
 }
 
-export function validatedRunRoot(configRoot: string, runId: string): string {
+export function validatedRunRoot(stateRoot: string, runId: string): string {
   if (!/^run-[A-Za-z0-9._-]+$/u.test(runId)) throw new Error("run_id inválido.");
-  return join(configRoot, ".knowledge", "runs", runId);
+  return join(stateRoot, "runs", runId);
 }
 
 function resolveNode(graph: KnowledgeGraph, input: string): GraphNode | undefined {

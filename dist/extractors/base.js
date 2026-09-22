@@ -99,5 +99,5 @@ function deduplicateFacts(values) { return [...new Map(values.map((value) => [va
 function deduplicateEvidence(values) { return [...new Map(values.map((value) => [value.id, value])).values()].sort((a, b) => compareBytes(a.id, b.id)); }
 function diagnostic(reader, path, code, error, severity = "error") { return { schema_version: 3, id: stableId("diagnostic", reader.snapshot.id, path, code), severity, code, scope: path, message: error instanceof Error ? error.message : String(error), evidence_ids: [], suggested_action: "Revise la capacidad afectada; no se completará con IA." }; }
 export function method(value, fallback = "UNKNOWN") { return (value ?? fallback).toLocaleUpperCase("en-US"); }
-export function pathValue(value) { return (value ?? "").replace(/^['\"`]|['\"`]$/gu, ""); }
+export function pathValue(value) { return (value ?? "").replace(/^['"`]|['"`]$/gu, ""); }
 //# sourceMappingURL=base.js.map

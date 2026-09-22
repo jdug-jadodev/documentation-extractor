@@ -88,4 +88,4 @@ function deduplicateEvidence(values: Evidence[]): Evidence[] { return [...new Ma
 function diagnostic(reader: SnapshotReader, path: string, code: string, error: unknown, severity: Diagnostic["severity"] = "error"): Diagnostic { return { schema_version: 3, id: stableId("diagnostic", reader.snapshot.id, path, code), severity, code, scope: path, message: error instanceof Error ? error.message : String(error), evidence_ids: [], suggested_action: "Revise la capacidad afectada; no se completará con IA." }; }
 
 export function method(value: string | undefined, fallback = "UNKNOWN"): string { return (value ?? fallback).toLocaleUpperCase("en-US"); }
-export function pathValue(value: string | undefined): string { return (value ?? "").replace(/^['\"`]|['\"`]$/gu, ""); }
+export function pathValue(value: string | undefined): string { return (value ?? "").replace(/^['"`]|['"`]$/gu, ""); }

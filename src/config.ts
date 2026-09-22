@@ -17,6 +17,7 @@ export interface KnowledgeConfiguration {
   setup_status: "configuration_pending" | "configured";
   workspace_file: string | null;
   vault_path: string;
+  state_path?: string;
   repositories: RepositoryConfiguration[];
   ai: { provider: "copilot-cli"; model: string | null; strong_model: string | null; max_invocations: number };
   sharing: { mode: "local" | "folder" | "export" };
@@ -27,6 +28,7 @@ export interface KnowledgeConfiguration {
 export interface EffectiveConfiguration extends KnowledgeConfiguration {
   config_path: string;
   config_root: string;
+  state_root: string;
   workspace_path: string | null;
   vault_root: string;
   repositories: Array<RepositoryConfiguration & { root: string }>;
@@ -49,8 +51,9 @@ export async function loadConfiguration(path: string, validator: ContractValidat
   });
   const workspacePath = value.workspace_file === null ? null : resolve(configRoot, value.workspace_file);
   const vaultRoot = resolve(configRoot, value.vault_path);
-  validateRootSeparation(configRoot, vaultRoot, repositories.map((item) => item.root));
-  return { ...value, config_path: configPath, config_root: configRoot, workspace_path: workspacePath, vault_root: vaultRoot, repositories };
+  const stateRoot = resolve(configRoot, value.state_path ?? ".knowledge");
+  validateRootSeparation(configRoot, stateRoot, vaultRoot, repositories.map((item) => item.root));
+  return { ...value, config_path: configPath, config_root: configRoot, state_root: stateRoot, workspace_path: workspacePath, vault_root: vaultRoot, repositories };
 }
 
 export async function saveConfiguration(path: string, config: KnowledgeConfiguration, validator: ContractValidator): Promise<void> {
@@ -68,6 +71,7 @@ export function stringifyConfiguration(config: KnowledgeConfiguration): string {
     `setup_status: ${config.setup_status}`,
     `workspace_file: ${config.workspace_file === null ? "null" : yamlString(config.workspace_file)}`,
     `vault_path: ${yamlString(config.vault_path)}`,
+    ...(config.state_path === undefined ? [] : [`state_path: ${yamlString(config.state_path)}`]),
     "repositories:",
   ];
   for (const repository of config.repositories) lines.push(`  - id: ${yamlString(repository.id)}`, `    path: ${yamlString(repository.path)}`, `    enabled: ${repository.enabled}`, `    default_branch: ${repository.default_branch === null ? "null" : yamlString(repository.default_branch)}`);
@@ -84,8 +88,8 @@ export async function configurationState(config: EffectiveConfiguration): Promis
   return "configured";
 }
 
-function validateRootSeparation(configRoot: string, vaultRoot: string, repositoryRoots: string[]): void {
-  const privateRoots = [resolve(configRoot, ".knowledge"), resolve(configRoot, "node_modules"), resolve(configRoot, "assets"), resolve(configRoot, "dist")];
+function validateRootSeparation(configRoot: string, stateRoot: string, vaultRoot: string, repositoryRoots: string[]): void {
+  const privateRoots = [stateRoot, resolve(configRoot, "node_modules"), resolve(configRoot, "assets"), resolve(configRoot, "dist")];
   for (const root of [...repositoryRoots, ...privateRoots]) {
     if (isContainedPath(vaultRoot, root) || isContainedPath(root, vaultRoot)) throw new Error(`La boveda se solapa con una raíz privada o de aplicación: ${root}`);
   }
