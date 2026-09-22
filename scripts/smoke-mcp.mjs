@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { join, resolve } from "node:path";
-import { assertNode24, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, handleScriptError, packageRoot } from "./shared.mjs";
 
 const configIndex = process.argv.indexOf("--config");
 const configPath = resolve(configIndex >= 0 && process.argv[configIndex + 1] ? process.argv[configIndex + 1] : join(packageRoot, "knowledge.yaml"));
@@ -8,7 +8,7 @@ const runIndex = process.argv.indexOf("--run");
 const suppliedRunId = runIndex >= 0 ? process.argv[runIndex + 1] : undefined;
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   const child = spawn(process.execPath, [join(packageRoot, "scripts", "mcp.mjs"), "--config", configPath], {
     cwd: packageRoot,
     shell: false,
@@ -52,7 +52,7 @@ async function main() {
     const status = await request("tools/call", { name: "docsys_status", arguments: {} });
     const repositories = await request("tools/call", { name: "docsys_list_repositories", arguments: {} });
     const names = listed.tools.map((tool) => tool.name).sort();
-    const required = ["docsys_explain_relation", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_status", "docsys_trace_flow"].sort();
+    const required = ["docsys_explain_relation", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_refresh_knowledge", "docsys_status", "docsys_trace_flow"].sort();
     if (JSON.stringify(names) !== JSON.stringify(required)) throw new Error(`Superficie MCP inesperada: ${names.join(", ")}`);
     if (status.isError || repositories.isError) throw new Error("Las consultas MCP de solo lectura devolvieron error.");
     const statusValue = status.structuredContent;

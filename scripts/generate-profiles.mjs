@@ -1,9 +1,9 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { assertNode24, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, handleScriptError, packageRoot } from "./shared.mjs";
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   const module = await import(pathToFileURL(join(packageRoot, "dist", "ai", "profiles.js")).href);
   const model = process.argv[2];
   if (!model) throw Object.assign(new Error("Indica un modelo explícito: pnpm profiles <modelo>"), { exitCode: 2 });

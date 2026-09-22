@@ -1,19 +1,19 @@
 schema_version: 3
-setup_status: configuration_pending
-workspace_file: "./prueba-extractor.code-workspace"
-vault_path: "C:\\Documentacion\\prueba-obsidian"
-state_path: "C:\\Herramientas\\documentation-extractor\\.knowledge\\workspaces\\prueba-extractor"
+setup_status: configured
+workspace_file: "C:\\Users\\Usuario\\Documents\\prueba-extractor\\.code-workspace"
+vault_path: "C:\\Users\\Usuario\\Documents\\prueba-extractor\\boveda"
+state_path: "C:\\Users\\Usuario\\Documents\\documentation-extractor\\.knowledge\\workspaces\\prueba-extractor"
 repositories:
   - id: "backend-elevacion"
-    path: "C:\\Proyectos\\back-elevation"
+    path: "C:\\Users\\Usuario\\Documents\\back-elevation"
     enabled: true
     default_branch: "main"
   - id: "estraviado"
-    path: "C:\\Proyectos\\estraviado"
+    path: "D:\\documents\\estraviado"
     enabled: true
     default_branch: "main"
   - id: "login-estraviado"
-    path: "C:\\Proyectos\\login-estraviado"
+    path: "D:\\documents\\mcp-server\\Loggin-Mcp"
     enabled: true
     default_branch: "main"
 ai:
@@ -25,4 +25,14 @@ sharing:
   mode: local
 azure:
   enabled: false
-
+overrides:
+  repository_metadata:
+    estraviado:
+      type: mobile_application
+      label: "Estraviado"
+    backend-elevacion:
+      type: microservice
+      label: "Backend de elevación"
+    login-estraviado:
+      type: microservice
+      label: "Login Estraviado"

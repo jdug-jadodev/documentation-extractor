@@ -6,6 +6,7 @@ import { configurationState, loadConfiguration } from "./config.js";
 import { runDeterministicScenario } from "./engine.js";
 import { explainRelations, loadRunArtifacts, prepareAndPublishDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
 import { stageProposalDraft } from "./publication/draft.js";
+import { refreshKnowledge } from "./refresh.js";
 export async function buildDocumentationMcp(options) {
     const validator = await ContractValidator.create(options.packageRoot);
     const server = new McpServer({ name: "sistema-documentacion", version: "4.0.0" });
@@ -30,6 +31,23 @@ export async function buildDocumentationMcp(options) {
         const result = await runDeterministicScenario({ packageRoot: options.packageRoot, configPath: options.configPath, repositoryIds: repositories, ...(refs === undefined ? {} : { refs }), validator });
         return { schema_version: 3, status: "review", run_id: result.run_id, repositories: result.repositories.map((item) => ({ id: item.repository_id, ref: item.snapshot.requested_ref, commit: item.snapshot.commit_oid, facts: item.bundle.facts.length, quality: item.bundle.quality })), relations: result.graph.edges.length, ai_invocations: 0, published: false };
     }));
+    server.registerTool("docsys_refresh_knowledge", {
+        description: "Sincroniza de forma segura las ramas configuradas (fetch + pull --ff-only), compara commits, reanaliza solo archivos afectados, reconstruye relaciones y reemplaza la documentación vigente en Obsidian. No usa IA ni cambia de rama.",
+        inputSchema: z.object({
+            repositories: z.array(z.string().min(1)).min(1).optional(),
+            refs: z.record(z.string(), z.string()).optional(),
+            sync_remote: z.boolean().optional(),
+            publish: z.boolean().optional(),
+        }),
+    }, async ({ repositories, refs, sync_remote, publish }) => toolResult(async () => await refreshKnowledge({
+        packageRoot: options.packageRoot,
+        configPath: options.configPath,
+        validator,
+        ...(repositories === undefined ? {} : { repositoryIds: repositories }),
+        ...(refs === undefined ? {} : { refs }),
+        ...(sync_remote === undefined ? {} : { syncRemote: sync_remote }),
+        ...(publish === undefined ? {} : { publish }),
+    })));
     server.registerTool("docsys_explain_relation", {
         description: "Explica relaciones respaldadas por un run existente; puede filtrar origen y destino.",
         inputSchema: z.object({ run_id: z.string().min(1), from: z.string().min(1).optional(), to: z.string().min(1).optional() }),

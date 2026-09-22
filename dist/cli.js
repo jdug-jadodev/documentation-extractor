@@ -16,6 +16,7 @@ import { copyEditionToFolder } from "./publication/folder.js";
 import { verifyPublicationManifest } from "./publication/manifest.js";
 import { restoreEditionIndex } from "./publication/history.js";
 import { compareRuns, explainRelations, loadRunArtifacts, prepareAndPublishDocumentation, prepareProposal, prepareRunDocumentation, queryRunArtifacts, renderRunQueryTable, traceFlow, validatedRunRoot } from "./run_services.js";
+import { refreshKnowledge } from "./refresh.js";
 export async function runCli(argv, options = {}) {
     const packageRoot = options.packageRoot ?? resolve(new URL("..", import.meta.url).pathname);
     const jsonMode = argv.includes("--json");
@@ -33,6 +34,8 @@ export async function runCli(argv, options = {}) {
             result = await verify(packageRoot, configPath, validator);
         else if (command === "actualizar")
             result = await update(packageRoot, configPath, validator, parsed.values);
+        else if (command === "sincronizar")
+            result = await synchronizeKnowledge(packageRoot, configPath, validator, parsed.values);
         else if (command === "relacion")
             result = await relation(configPath, validator, parsed.values);
         else if (command === "flujo")
@@ -170,6 +173,14 @@ async function update(packageRoot, configPath, validator, values) {
     }
     const result = await runDeterministicScenario({ packageRoot, configPath, repositoryIds, ...(Object.keys(refs).length === 0 ? {} : { refs }), ...(workingTreePaths === undefined ? {} : { workingTreePaths }), validator });
     return { schema_version: 3, status: "review", run_id: result.run_id, repositories: result.repositories.map((item) => ({ id: item.repository_id, ref: item.snapshot.requested_ref, commit: item.snapshot.commit_oid, facts: item.bundle.facts.length, quality: item.bundle.quality })), relations: result.graph.edges.length, ai_invocations: 0, published: false };
+}
+async function synchronizeKnowledge(packageRoot, configPath, validator, values) {
+    const config = await loadConfiguration(configPath, validator);
+    const repositoryIds = typeof values.repos === "string" || typeof values.repo === "string"
+        ? parseList(typeof values.repos === "string" ? values.repos : requiredString(values.repo, "--repo o --repos"))
+        : config.repositories.filter((item) => item.enabled).map((item) => item.id);
+    const refs = parseRefs(values.ramas, repositoryIds, values.rama);
+    return await refreshKnowledge({ packageRoot, configPath, validator, repositoryIds, ...(Object.keys(refs).length === 0 ? {} : { refs }), syncRemote: true, publish: values["sin-publicar"] !== true });
 }
 async function relation(configPath, validator, values) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return explainRelations(artifacts.graph, runId, optionalString(values.desde), optionalString(values.hasta)); }
 async function flow(configPath, validator, values) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return traceFlow(artifacts.graph, runId, requiredString(values.desde, "--desde"), requiredString(values.hasta, "--hasta")); }

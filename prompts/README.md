@@ -1,16 +1,21 @@
-# Prompts de prueba para GitHub Copilot
+# Prompts básicos
 
-Estos prompts prueban el sistema desde GitHub Copilot usando exclusivamente las herramientas `docsys_*` del servidor MCP `sistema-documentacion`.
+Estas plantillas sirven para cualquier repositorio configurado en el workspace.
+Reemplaza los valores entre corchetes y envía el texto al agente
+`docsys-orchestrator-entry`.
 
-## Orden recomendado
+- [01-documentacion-completa.md](01-documentacion-completa.md): uno o varios repositorios.
+- [02-flujo-o-endpoint.md](02-flujo-o-endpoint.md): un endpoint o flujo concreto.
+- [03-relacion-entre-sistemas.md](03-relacion-entre-sistemas.md): comunicación entre dos sistemas.
+- [04-plan-desarrollo-o-migracion.md](04-plan-desarrollo-o-migracion.md): ubicación de un desarrollo, ADR o migración.
+- [05-actualizar-documentacion.md](05-actualizar-documentacion.md): actualización incremental después de commits.
 
-1. Abrir una conversación nueva.
-2. Seleccionar el agente `docsys-orchestrator-entry`.
-3. Ejecutar [01-prueba-completa-desde-cero.md](01-prueba-completa-desde-cero.md).
-4. Probar profundidad con [02-documentacion-profunda-estraviado.md](02-documentacion-profunda-estraviado.md).
-5. Probar un recorrido concreto con [03-flujo-registro-estraviado-login.md](03-flujo-registro-estraviado-login.md).
-6. Comprobar el estado real de Archify con [04-prueba-archify.md](04-prueba-archify.md).
-7. Evaluar una decisión de desarrollo o migración con los prompts 05 y 06.
-8. Comparar calidad con [07-comparacion-calidad.md](07-comparacion-calidad.md).
+También puedes pedirlo con lenguaje normal, por ejemplo:
 
-La documentación factual generada por MCP se valida y publica automáticamente en `Actual`. Las ADR, especificaciones y migraciones siguen siendo propuestas, no decisiones adoptadas.
+```text
+Genera la documentación completa de [repo-a], [repo-b] y [repo-c].
+```
+
+```text
+Documenta el flujo completo de POST /login en [servicio].
+```

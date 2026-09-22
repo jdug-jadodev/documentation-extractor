@@ -2,18 +2,22 @@
 
 ## Ya ejecutado
 
-- Tipos, compilación y suite automatizada: 42/42 pruebas superadas.
+- Tipos, compilación y suite automatizada: 45/45 pruebas superadas.
 - Configuración separada de motor, workspace, estado privado y bóveda.
 - Run real de los tres repositorios en `main`, sin checkout ni ejecución de aplicaciones.
 - Extracción de módulos, clases, funciones, métodos, firmas, llamadas observadas, capas, imports, tecnologías, paquetes, scripts, rutas Express, handlers, datos y llamadas salientes.
 - Generación y publicación automática de fichas por servicio, Mermaid de servicio, Mermaid por entrada/salida HTTP y mapas de relaciones.
 - Edición vigente `2026-09-22T17-15-52-515Z-be7c633cf0`, copiada a `Actual` y verificada por hashes con `status: complete` (29 archivos).
 - El publicador genera el filtro del grafo para ocultar históricos, borradores y staging.
-- MCP comprobado con ocho herramientas; `docsys_prepare_documentation` reutilizó el run y la edición final sin reanalizar.
+- MCP comprobado con nueve herramientas; `docsys_prepare_documentation` reutilizó el run y la edición final sin reanalizar.
+- Sincronización incremental comprobada con Git sintético: fast-forward, diff de una clase, reutilización del archivo intacto, no-op sin commit nuevo y bloqueo ante cambios locales.
+- Retención de Obsidian comprobada en una bóveda temporal: solo permanece la edición canónica más reciente y `Actual` contiene el contenido nuevo.
 
 ## Aceptaciones aún pendientes
 
-- P01–P112 y N01–N16 permanecen como `pending`; 42 pruebas automatizadas no equivalen a completar 128 criterios de aceptación.
+- Ejecutar `docsys_refresh_knowledge` contra el workspace real después de un commit remoto nuevo y revisar la sustitución de `Actual` en Obsidian; hasta ahora el ciclo fetch/pull/diff incremental se validó únicamente con repositorios Git sintéticos.
+- Confirmar permisos y política de parches en el propio PC empresarial; la versión exacta Node 20.19.5 ya pasó tipos, build, 45/45 pruebas y smoke MCP local.
+- P01–P112 y N01–N16 permanecen como `pending`; 45 pruebas automatizadas no equivalen a completar 128 criterios de aceptación.
 - Revisión visual humana del contenido actual en Obsidian.
 - Aplicar en la vista gráfica `-path:Publicaciones -path:Borradores -path:.staging`, o cerrar Obsidian antes de la siguiente publicación; la aplicación abierta sobrescribió el filtro generado.
 - Prueba real de los seis especialistas interpretativos mediante Copilot CLI, incluyendo presupuesto, caché, cancelación y reanudación.

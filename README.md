@@ -4,13 +4,13 @@ Motor local y determinista que extrae hechos de repositorios autorizados, correl
 
 ## Estado
 
-El motor está implementado en `src/`. La suite automatizada disponible pasa 42/42 y el servidor MCP se probó por `stdio` sobre un workspace real de tres repositorios. La extracción arquitectónica, los diagramas por servicio/flujo y la publicación automática en Obsidian también se comprobaron en Windows. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado de forma instrumentada los especialistas, Archify externo, Azure ni la matriz Linux/macOS.
+El motor está implementado en `src/`. La suite automatizada disponible pasa 45/45 y el servidor MCP se probó por `stdio` sobre un workspace real de tres repositorios. La extracción arquitectónica, la actualización incremental por commit/archivo, los diagramas por servicio/flujo y la publicación automática en Obsidian también se comprobaron en Windows. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado de forma instrumentada los especialistas, Archify externo, Azure ni la matriz Linux/macOS.
 
 La instalación del motor conserva su `knowledge.yaml` en `configuration_pending`. Cada workspace recibe su propia configuración e integración; los runs privados permanecen en el motor y la bóveda Obsidian es una tercera ubicación separada. Ninguna entrada inicia análisis automáticamente.
 
 ## Requisitos
 
-- Node.js 24.x mediante NVM; versión de desarrollo: 24.21.0.
+- Node.js 20.x–24.x mediante NVM. Versión empresarial objetivo: 20.19.5; también comprobado con 24.21.0.
 - pnpm 10.x como gestor preferido; `npm start` sigue siendo la entrada sencilla.
 - Git para leer commits y ramas sin checkout.
 - Obsidian para revisar la documentación.
@@ -18,10 +18,12 @@ La instalación del motor conserva su `knowledge.yaml` en `configuration_pending
 
 No se necesita ejecutar Python, .NET, Java, Maven, Gradle, npm de las aplicaciones ni Docker.
 
+> Node 20 es compatible con el motor, pero Node.js lo declaró EOL el 24 de marzo de 2026. Si la empresa obliga a usarlo, conviene tratarlo como una excepción temporal gestionada y planificar Node 22/24 para recuperar actualizaciones oficiales de seguridad.
+
 ## Instalación y arranque
 
 ```powershell
-nvm use 24.21.0
+nvm use 20.19.5
 pnpm install --frozen-lockfile --ignore-scripts
 npm start
 ```
@@ -36,6 +38,7 @@ npm run docs -- verificar
 npm run docs -- actualizar --repo <id> --rama <ref> --sin-ia --sin-publicar
 npm run docs -- actualizar --repos <id-a,id-b> --ramas <id-a=ref,id-b=ref> --sin-ia --sin-publicar
 npm run docs -- actualizar --repo <id> --rama <ref> --incluir-cambios-locales --rutas <archivo-a,archivo-b> --sin-ia --sin-publicar
+npm run docs -- sincronizar
 npm run docs -- relacion --run <id> --desde <componente> --hasta <componente>
 npm run docs -- flujo --run <id> --desde <componente> --hasta <componente>
 npm run docs -- comparar --base <run-base> --run <run-objetivo> --repo <id>
@@ -81,7 +84,7 @@ El instalador coloca en la carpeta contenedora del workspace únicamente `knowle
 - `src/mcp.ts`: conexión local de Copilot.
 - `src/ai/`: perfiles aislados, presupuesto, JSONL y adaptador Copilot.
 - `src/documentation/`, `src/review/`, `src/obsidian/`: ASD-TSE-100, validación mecánica, Mermaid por servicio y flujo, y bóveda candidata privada.
-- `src/publication/`: autorización automática ligada a hashes y ediciones inmutables.
+- `src/publication/`: autorización automática ligada a hashes, reemplazo de `Actual` y retención de una sola edición canónica.
 - `.knowledge/`: runs, caché, candidatos y respaldo privado; nunca se publica.
 
 ## Seguridad

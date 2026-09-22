@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { assertNode24, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, handleScriptError, packageRoot } from "./shared.mjs";
 
 async function compile(project) {
   await new Promise((resolve, reject) => {
@@ -11,7 +11,7 @@ async function compile(project) {
 }
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   await compile("tsconfig.json");
   await compile("tsconfig.test.json");
 }

@@ -20,6 +20,7 @@ import type { QueryCategory } from "./query.js";
 import { compareRuns, explainRelations, loadRunArtifacts, prepareAndPublishDocumentation, prepareProposal, prepareRunDocumentation, queryRunArtifacts, renderRunQueryTable, traceFlow, validatedRunRoot } from "./run_services.js";
 import type { ProposalType } from "./proposal/model.js";
 import type { PublicationManifest } from "./contracts/types.js";
+import { refreshKnowledge } from "./refresh.js";
 
 export interface CliOptions { packageRoot?: string; }
 
@@ -36,6 +37,7 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
     if (command === "configurar") result = await configure(configPath, validator, parsed.values["no-interactivo"] === true);
     else if (command === "verificar") result = await verify(packageRoot, configPath, validator);
     else if (command === "actualizar") result = await update(packageRoot, configPath, validator, parsed.values);
+    else if (command === "sincronizar") result = await synchronizeKnowledge(packageRoot, configPath, validator, parsed.values);
     else if (command === "relacion") result = await relation(configPath, validator, parsed.values);
     else if (command === "flujo") result = await flow(configPath, validator, parsed.values);
     else if (command === "comparar") result = await compare(configPath, validator, parsed.values);
@@ -129,6 +131,15 @@ async function update(packageRoot: string, configPath: string, validator: Contra
   }
   const result = await runDeterministicScenario({ packageRoot, configPath, repositoryIds, ...(Object.keys(refs).length === 0 ? {} : { refs }), ...(workingTreePaths === undefined ? {} : { workingTreePaths }), validator });
   return { schema_version: 3, status: "review", run_id: result.run_id, repositories: result.repositories.map((item) => ({ id: item.repository_id, ref: item.snapshot.requested_ref, commit: item.snapshot.commit_oid, facts: item.bundle.facts.length, quality: item.bundle.quality })), relations: result.graph.edges.length, ai_invocations: 0, published: false };
+}
+
+async function synchronizeKnowledge(packageRoot: string, configPath: string, validator: ContractValidator, values: Record<string, unknown>) {
+  const config = await loadConfiguration(configPath, validator);
+  const repositoryIds = typeof values.repos === "string" || typeof values.repo === "string"
+    ? parseList(typeof values.repos === "string" ? values.repos : requiredString(values.repo, "--repo o --repos"))
+    : config.repositories.filter((item) => item.enabled).map((item) => item.id);
+  const refs = parseRefs(values.ramas, repositoryIds, values.rama);
+  return await refreshKnowledge({ packageRoot, configPath, validator, repositoryIds, ...(Object.keys(refs).length === 0 ? {} : { refs }), syncRemote: true, publish: values["sin-publicar"] !== true });
 }
 
 async function relation(configPath: string, validator: ContractValidator, values: Record<string, unknown>) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return explainRelations(artifacts.graph, runId, optionalString(values.desde), optionalString(values.hasta)); }

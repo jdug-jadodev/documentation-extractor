@@ -17,8 +17,9 @@ export class SourceArchitecturePlugin implements ExtractorPlugin {
   }
 
   async extract(reader: SnapshotReader, component: CandidateStack, options: ExtractionOptions): Promise<ExtractionResult> {
-    const entries = [...await reader.list()].filter((entry) => entry.kind === "blob").sort((a, b) => compareBytes(a.relative_path, b.relative_path));
-    const sourcePaths = new Set(entries.filter((entry) => SOURCE.test(entry.relative_path)).map((entry) => entry.relative_path));
+    const allEntries = [...await reader.list()].filter((entry) => entry.kind === "blob").sort((a, b) => compareBytes(a.relative_path, b.relative_path));
+    const sourcePaths = new Set(allEntries.filter((entry) => SOURCE.test(entry.relative_path)).map((entry) => entry.relative_path));
+    const entries = options.include_paths === undefined ? allEntries : allEntries.filter((entry) => options.include_paths!.has(entry.relative_path));
     const facts: Fact[] = [], evidence: Evidence[] = [], diagnostics: Diagnostic[] = [];
     const processed = { modules: 0, symbols: 0, imports: 0, manifests: 0 };
     for (const entry of entries) {

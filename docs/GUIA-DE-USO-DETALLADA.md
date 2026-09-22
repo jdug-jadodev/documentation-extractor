@@ -82,7 +82,7 @@ Windows:
 
 ```powershell
 cd C:\Herramientas\documentation-extractor
-nvm use 24.21.0
+nvm use 20.19.5
 npm start
 ```
 
@@ -145,6 +145,36 @@ npm run docs -- actualizar --repo pedidos-api --rama main --incluir-cambios-loca
 
 Esa captura queda marcada `dirty` y `working_tree`. Excluye rutas de dependencias/build y nombres sensibles; si un archivo cambia durante la captura se reintenta una vez y luego se bloquea. Puede revisarse localmente, pero no compartirse por carpeta o ZIP. Para compartirla se necesita un commit y un run nuevo.
 
+### Actualizar ramas y documentación después de un commit
+
+Para mantener la base de conocimiento vigente sin releer todos los repositorios:
+
+```powershell
+npm run docs -- sincronizar
+```
+
+Ese comando usa todos los repositorios habilitados y realiza este flujo:
+
+1. Comprueba que cada repositorio esté en la rama configurada y sin cambios locales.
+2. Ejecuta `git fetch --prune` y consulta el commit remoto.
+3. Solo cuando el commit remoto difiere, ejecuta `git pull --ff-only`; nunca cambia de rama, hace `reset`, `stash` ni merge forzado.
+4. Compara el commit nuevo con el último run canónico.
+5. Si ningún commit cambió, devuelve `unchanged`: no crea run ni documentación nueva.
+6. Si cambió una clase o método, reabre solamente ese archivo y los módulos que dependían estáticamente de él. Los hechos de archivos intactos se reutilizan.
+7. Si se agregan o eliminan servicios, procesa los archivos afectados, elimina del conjunto vigente los hechos cuya evidencia desapareció y reconstruye todas las relaciones.
+8. Si cambia un manifiesto (`package.json`, `pom.xml`, `.csproj`, etc.) o no existe una base compatible, vuelve a analizar ese repositorio completo porque pudo cambiar su tecnología.
+9. Genera una edición completa combinando hechos nuevos y reutilizados, y reemplaza atómicamente `Actual` en Obsidian. Por eso nunca quedan mezclados Markdown viejos y nuevos en la vista vigente.
+
+Para limitar el escenario o no publicar:
+
+```powershell
+npm run docs -- sincronizar --repos frontend,pedidos-api --sin-publicar
+```
+
+Desde Copilot se pide: `Actualiza la documentación vigente de todos los repositorios habilitados`. El agente usa `docsys_refresh_knowledge`, que ya sincroniza, actualiza y publica; no debe llamar después a `docsys_prepare_documentation` para el mismo run.
+
+Si un desarrollador aún no ha creado el commit, el flujo de sincronización se bloquea sin tocar su trabajo. Para una revisión temporal de archivos sin commit se conserva `actualizar --incluir-cambios-locales`, pero esa captura no sustituye la documentación canónica ni se comparte.
+
 ## 7. Consultar hechos
 
 ```powershell
@@ -180,6 +210,33 @@ overrides:
 ```
 
 El alias convierte esa base URL en la identidad `pagos-api`; no inventa endpoints ni contratos.
+
+### Clasificar correctamente aplicaciones y microservicios
+
+Cada repositorio se dibuja como un sistema independiente. Una llamada desde una aplicación hacia un microservicio crea una flecha de consumo; nunca coloca al microservicio dentro de la aplicación ni implica que solo pueda funcionar con ella.
+
+El motor puede inferir una aplicación por evidencia de interfaz y un servicio por endpoints, pero en un entorno empresarial conviene declarar la clasificación y el nombre legible:
+
+```yaml
+overrides:
+  repository_metadata:
+    estraviado:
+      type: mobile_application
+      label: "Estraviado"
+      domain: "Movilidad"
+    backend-elevacion:
+      type: microservice
+      label: "Backend de elevación"
+      domain: "Elevación"
+    login-estraviado:
+      type: microservice
+      label: "Login Estraviado"
+      domain: "Identidad y acceso"
+```
+
+Tipos reconocidos: `mobile_application`, `web_application`, `client_application`, `microservice`, `service`, `api` y `library`. El dominio es opcional y debe ser un dato de la organización, no una inferencia del motor.
+
+Con esta configuración, el mapa muestra a `Estraviado` en **Aplicaciones cliente independientes** y a los dos backends en **Microservicios y APIs independientes**. Las flechas parten del consumidor detectado hacia el proveedor correlacionado.
 
 ## 9. Trazar un flujo de extremo a extremo
 
@@ -232,7 +289,7 @@ npm run docs -- documentar --run <run-id>
 ```
 
 - `revisar` es opcional: prepara y valida la bóveda candidata privada sin cambiar la edición visible.
-- `documentar` regenera el candidato, ejecuta las validaciones mecánicas y publica directamente una edición inmutable en `Publicaciones/<edición>`; también actualiza la vista estable `Actual`.
+- `documentar` regenera el candidato, ejecuta las validaciones mecánicas, reemplaza la vista estable `Actual` y conserva únicamente esa edición canónica en `Publicaciones/<edición>`.
 - No existe un paso de aprobación humana. Los estados `candidate` y `unresolved` no bloquean la documentación: se publican claramente como limitaciones. Solo un error mecánico o de seguridad bloquea la publicación.
 - **Abrir Obsidian** abre la bóveda configurada.
 
@@ -244,7 +301,7 @@ La salida documental contiene:
 - `Actual/Flujos/end-to-end.md`: índice de todos los flujos y mapa de consumo entre servicios.
 - `Actual/Mapas/microservicios.md`: relaciones HTTP entrantes/salientes con estado, llamada observada, evidencia y limitaciones.
 - `Actual/Mapas/relaciones.md`: arquitectura general compatible con el contrato Archify; Archify queda reservado para esta vista global.
-- `Inicio.md`: enlace corto a `Actual` y al historial inmutable.
+- `Inicio.md`: enlace corto a `Actual` y a la única edición canónica conservada.
 
 Las fichas incluyen clases, funciones, métodos, firmas, llamadas estáticas observadas y una explicación derivada del nombre/código. Esa explicación no se presenta como comportamiento comprobado en ejecución.
 
@@ -325,6 +382,7 @@ Herramientas MCP disponibles:
 - `docsys_status`: estado, sin analizar.
 - `docsys_list_repositories`: repositorios configurados.
 - `docsys_prepare_analysis`: run de uno o varios repositorios, solo por solicitud expresa.
+- `docsys_refresh_knowledge`: sincroniza ramas con avance rápido, evita trabajo si no cambia el commit, actualiza por archivos afectados y publica la vista completa en Obsidian.
 - `docsys_explain_relation`: relaciones de un run.
 - `docsys_trace_flow`: camino entre componentes.
 - `docsys_query`: hechos ya extraídos.
@@ -361,7 +419,7 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 
 ## 15. Lo que sigue pendiente antes de usarlo como validado
 
-- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 42/42.
+- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 45/45.
 - Autorizar la demo sintética si se desea ejecutarla.
 - Verificar VS Code, Copilot CLI e IntelliJ con sus versiones instaladas.
 - Instalar/configurar Copilot CLI y autorizar cualquier llamada real a los especialistas.

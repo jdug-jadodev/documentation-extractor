@@ -34,7 +34,7 @@ export class PatternExtractorPlugin implements ExtractorPlugin {
   }
 
   async extract(reader: SnapshotReader, component: CandidateStack, options: ExtractionOptions): Promise<ExtractionResult> {
-    const entries = [...await reader.list()].filter((entry) => entry.kind === "blob").sort((a, b) => compareBytes(a.relative_path, b.relative_path));
+    const entries = [...await reader.list()].filter((entry) => entry.kind === "blob" && (options.include_paths === undefined || options.include_paths.has(entry.relative_path))).sort((a, b) => compareBytes(a.relative_path, b.relative_path));
     const evidence: Evidence[] = [];
     const facts: Fact[] = [];
     const diagnostics: Diagnostic[] = [];

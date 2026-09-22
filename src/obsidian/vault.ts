@@ -2,15 +2,25 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { DocumentModel, Fact, GraphEdge, KnowledgeGraph } from "../contracts/types.js";
 import { atomicWrite } from "../platform/fs.js";
-import { renderDocument, renderRelationshipMermaid } from "../documentation/render.js";
+import { renderDocument } from "../documentation/render.js";
 import { renderEditionIndex, renderGraphTable, serviceDocumentPath } from "./navigation.js";
 import { resolveEndpointFacts, type ResolvedEndpoint } from "../documentation/model.js";
 
 interface ModuleEdge { from: string; to: string; imports: string[]; }
 interface FlowPoint extends ResolvedEndpoint { direction: "entrada" | "salida"; transport: string; target: string; }
 interface ServiceFlow { endpoint: FlowPoint; slug: string; path: string; module_edges: ModuleEdge[]; }
+export interface RepositoryProfileOverride { type?: string; label?: string; domain?: string; }
+export type RepositoryProfileOverrides = Readonly<Record<string, RepositoryProfileOverride>>;
+type RepositoryGroup = "clients" | "services" | "components";
+interface RepositoryProfile {
+  id: string;
+  label: string;
+  domain: string | null;
+  group: RepositoryGroup;
+  type_label: string;
+}
 
-export async function buildCandidateVault(root: string, model: DocumentModel, graph: KnowledgeGraph, serviceModels: ReadonlyMap<string, DocumentModel> = new Map(), facts: readonly Fact[] = []): Promise<void> {
+export async function buildCandidateVault(root: string, model: DocumentModel, graph: KnowledgeGraph, serviceModels: ReadonlyMap<string, DocumentModel> = new Map(), facts: readonly Fact[] = [], profileOverrides: RepositoryProfileOverrides = {}): Promise<void> {
   await mkdir(root, { recursive: true });
   const allFlows: ServiceFlow[] = [];
   await atomicWrite(join(root, "Inicio.md"), renderEditionIndex(model));
@@ -24,16 +34,16 @@ export async function buildCandidateVault(root: string, model: DocumentModel, gr
     await mkdir(join(serviceRoot, "diagramas"), { recursive: true });
     const serviceFlows = createServiceFlows(repositoryId, serviceRootPortable, serviceFacts, graph);
     allFlows.push(...serviceFlows);
-    const architecture = renderServiceArchitecture(repositoryId, serviceFacts, graph, facts);
-    await atomicWrite(join(serviceRoot, "diagramas", "arquitectura.md"), `# Arquitectura de ${repositoryId}\n\n> Vista resumida por responsabilidades observadas. Las líneas discontinuas representan relaciones candidatas o no resueltas.\n\n\`\`\`mermaid\n${architecture}\n\`\`\`\n\n${renderServiceRelations(repositoryId, graph, facts)}\n`);
+    const architecture = renderServiceArchitecture(repositoryId, serviceFacts, graph, facts, profileOverrides);
+    await atomicWrite(join(serviceRoot, "diagramas", "arquitectura.md"), `# Arquitectura de ${repositoryId}\n\n> El bloque principal delimita únicamente este repositorio. Los otros sistemas se muestran fuera del bloque: una flecha expresa consumo o integración, no propiedad. Las líneas discontinuas representan relaciones candidatas o no resueltas.\n\n\`\`\`mermaid\n${architecture}\n\`\`\`\n\n${renderServiceRelations(repositoryId, graph, facts, profileOverrides)}\n`);
     for (const flow of serviceFlows) await atomicWrite(join(root, ...flow.path.split("/")), renderFlowDocument(flow, repositoryId));
-    await atomicWrite(join(serviceRoot, "servicio.md"), `${renderDocument(serviceModel)}\n${renderServiceVisualIndex(repositoryId, architecture, serviceFlows, graph, facts)}\n`);
+    await atomicWrite(join(serviceRoot, "servicio.md"), `${renderDocument(serviceModel)}\n${renderServiceVisualIndex(repositoryId, architecture, serviceFlows, graph, facts, profileOverrides)}\n`);
   }
   await mkdir(join(root, "Mapas"), { recursive: true });
-  await atomicWrite(join(root, "Mapas", "relaciones.md"), `# Arquitectura general\n\n> Diagrama arquitectónico generado de forma determinista bajo el contrato de la skill \`archify-documentation\`. Archify externo solo se considera ejecutado cuando existe un adaptador registrado.\n\n\`\`\`mermaid\n${renderRelationshipMermaid(model)}\n\`\`\`\n\n${renderGraphTable(graph)}\n`);
-  await atomicWrite(join(root, "Mapas", "microservicios.md"), renderMicroserviceDocument(graph, facts));
+  await atomicWrite(join(root, "Mapas", "relaciones.md"), `# Arquitectura general\n\n> Cada repositorio se representa como un sistema independiente. Las flechas expresan consumo o integración, nunca propiedad ni contención.\n\n\`\`\`mermaid\n${renderMicroserviceMermaid(graph, facts, profileOverrides)}\n\`\`\`\n\n${renderGraphTable(graph)}\n`);
+  await atomicWrite(join(root, "Mapas", "microservicios.md"), renderMicroserviceDocument(graph, facts, profileOverrides));
   await mkdir(join(root, "Flujos"), { recursive: true });
-  await atomicWrite(join(root, "Flujos", "end-to-end.md"), renderEndToEnd(graph, facts, allFlows));
+  await atomicWrite(join(root, "Flujos", "end-to-end.md"), renderEndToEnd(graph, facts, allFlows, profileOverrides));
 }
 
 function createServiceFlows(repositoryId: string, serviceRoot: string, facts: readonly Fact[], graph: KnowledgeGraph): ServiceFlow[] {
@@ -64,26 +74,35 @@ function createServiceFlows(repositoryId: string, serviceRoot: string, facts: re
   });
 }
 
-function renderServiceVisualIndex(repositoryId: string, architecture: string, flows: readonly ServiceFlow[], graph: KnowledgeGraph, facts: readonly Fact[]): string {
+function renderServiceVisualIndex(repositoryId: string, architecture: string, flows: readonly ServiceFlow[], graph: KnowledgeGraph, facts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
   const flowLinks = flows.length > 0 ? flows.map((flow) => `- [[flujos/${flow.slug}|${flow.endpoint.direction} · ${flow.endpoint.method} ${flow.endpoint.path}]] — \`${flow.endpoint.handler}\``).join("\n") : "- No se detectaron entradas ni llamadas HTTP salientes.";
-  return [`## Diagramas del servicio`, "", `[[diagramas/arquitectura|Abrir arquitectura de ${repositoryId}]]`, "", "```mermaid", architecture, "```", "", "## Flujos HTTP documentados", "", flowLinks, "", "## Relaciones con otros servicios", "", renderServiceRelations(repositoryId, graph, facts), ""].join("\n");
+  return [`## Diagramas del servicio`, "", `[[diagramas/arquitectura|Abrir arquitectura de ${repositoryId}]]`, "", "```mermaid", architecture, "```", "", "## Flujos HTTP documentados", "", flowLinks, "", "## Relaciones con otros servicios", "", renderServiceRelations(repositoryId, graph, facts, profileOverrides), ""].join("\n");
 }
 
-function renderServiceArchitecture(repositoryId: string, facts: readonly Fact[], graph: KnowledgeGraph, allFacts: readonly Fact[]): string {
+function renderServiceArchitecture(repositoryId: string, facts: readonly Fact[], graph: KnowledgeGraph, allFacts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
   const modules = facts.filter((fact) => fact.kind === "source_module");
   const groups = new Map<string, number>();
   for (const fact of modules) { const value = asRecord(fact.value), role = String(value.role ?? value.layer ?? "module"); groups.set(role, (groups.get(role) ?? 0) + 1); }
-  const lines = ["flowchart LR", `  service["${escapeMermaid(repositoryId)}"]`];
+  const profile = repositoryProfile(repositoryId, allFacts, profileOverrides);
+  const boundaryLabel = `${profile.type_label} · ${profile.label}${profile.domain === null ? "" : ` · Dominio: ${profile.domain}`}`;
+  const lines = ["flowchart LR", `  subgraph boundary["${escapeMermaid(boundaryLabel)}"]`, "    direction TB", `    service["${escapeMermaid(profile.label)}"]`];
   let counter = 0;
-  for (const [role, count] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) { const id = `role${counter++}`; lines.push(`  service --> ${id}["${escapeMermaid(role)} · ${count} módulo(s)"]`); }
+  for (const [role, count] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) { const id = `role${counter++}`; lines.push(`    service --> ${id}["${escapeMermaid(role)} · ${count} módulo(s)"]`); }
+  if (groups.size === 0) lines.push("    service --> empty[\"Sin módulos extraídos\"]");
+  lines.push("  end");
   const componentId = `component:${repositoryId}`;
   for (const edge of graph.edges.filter((item) => item.type === "calls_http" && (item.from === componentId || item.to === componentId))) {
-    const otherId = edge.from === componentId ? edge.to : edge.from, other = graph.nodes.find((node) => node.id === otherId)?.label ?? otherId;
+    const otherId = edge.from === componentId ? edge.to : edge.from;
+    const otherNode = graph.nodes.find((node) => node.id === otherId);
+    const otherRepositoryId = otherId.startsWith("component:") ? otherId.slice("component:".length) : null;
+    const otherProfile = otherRepositoryId === null ? null : repositoryProfile(otherRepositoryId, allFacts, profileOverrides);
+    const other = otherProfile === null
+      ? `${otherNode?.label ?? otherId} · Sistema externo`
+      : `${otherProfile.label} · ${otherProfile.type_label}${otherProfile.domain === null ? "" : ` · Dominio: ${otherProfile.domain}`}`;
     const relation = relationLabel(edge, allFacts), id = `rel${counter++}`, arrow = edge.status === "supported" ? "-->" : "-.->";
     lines.push(`  ${id}["${escapeMermaid(other)}"]`);
     lines.push(edge.from === componentId ? `  service ${arrow}|"${escapeMermaid(relation)}"| ${id}` : `  ${id} ${arrow}|"${escapeMermaid(relation)}"| service`);
   }
-  if (groups.size === 0 && lines.length === 2) lines.push("  service --> empty[\"Sin módulos extraídos\"]");
   return lines.join("\n");
 }
 
@@ -105,35 +124,90 @@ function renderEndpointMermaid(flow: ServiceFlow): string {
   return lines.join("\n");
 }
 
-function renderEndToEnd(graph: KnowledgeGraph, facts: readonly Fact[], flows: readonly ServiceFlow[]): string {
+function renderEndToEnd(graph: KnowledgeGraph, facts: readonly Fact[], flows: readonly ServiceFlow[], profileOverrides: RepositoryProfileOverrides): string {
   const grouped = new Map<string, ServiceFlow[]>();
   for (const flow of flows) grouped.set(flow.endpoint.component, [...(grouped.get(flow.endpoint.component) ?? []), flow]);
   const lines = ["# Flujos extremo a extremo", "", "Cada endpoint enlaza su propio Markdown con diagrama Mermaid. Las relaciones entre servicios proceden del grafo correlacionado y conservan su estado.", ""];
   for (const [service, items] of grouped) { lines.push(`## ${service}`, ""); for (const flow of items) lines.push(`- [[${flow.path.replace(/\.md$/u, "")}|${flow.endpoint.direction} · ${flow.endpoint.method} ${flow.endpoint.path}]] — ${flow.endpoint.handler} — **${flow.endpoint.status}**`); lines.push(""); }
-  lines.push("## Mapa de consumo entre servicios", "", "[[../Mapas/microservicios|Abrir mapa detallado de microservicios]]", "", "```mermaid", renderMicroserviceMermaid(graph, facts), "```", "");
+  lines.push("## Mapa de consumo entre sistemas", "", "> Cada repositorio es un sistema independiente; las flechas indican quién consume a quién.", "", "[[../Mapas/microservicios|Abrir mapa detallado de sistemas]]", "", "```mermaid", renderMicroserviceMermaid(graph, facts, profileOverrides), "```", "");
   return lines.join("\n");
 }
 
-function renderMicroserviceDocument(graph: KnowledgeGraph, facts: readonly Fact[]): string {
+function renderMicroserviceDocument(graph: KnowledgeGraph, facts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
   const edges = graph.edges.filter((edge) => edge.type === "calls_http");
   const label = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id;
-  return ["# Relaciones entre microservicios y sistemas externos", "", "> Las flechas continuas están respaldadas; las discontinuas son candidatas o no resueltas. Una variable de URL sin alias conserva un nodo externo explícito.", "", "```mermaid", renderMicroserviceMermaid(graph, facts), "```", "", "| Consumidor | Llamada observada | Destino | Estado | Evidencia | Limitaciones |", "|---|---|---|---|---|---|", ...edges.map((edge) => `| ${cell(label(edge.from))} | ${cell(relationLabel(edge, facts))} | ${cell(label(edge.to))} | ${edge.status} | ${cell(edge.evidence_ids.join(", "))} | ${cell(edge.limitations.join("; ") || "Sin limitaciones adicionales")} |`), ""].join("\n");
+  return ["# Relaciones entre sistemas independientes", "", "> Cada repositorio conserva su propio límite. Las flechas continuas están respaldadas; las discontinuas son candidatas o no resueltas. Una variable de URL sin alias conserva un nodo externo explícito.", "", "```mermaid", renderMicroserviceMermaid(graph, facts, profileOverrides), "```", "", "| Consumidor | Llamada observada | Destino | Estado | Evidencia | Limitaciones |", "|---|---|---|---|---|---|", ...edges.map((edge) => `| ${cell(label(edge.from))} | ${cell(relationLabel(edge, facts))} | ${cell(label(edge.to))} | ${edge.status} | ${cell(edge.evidence_ids.join(", "))} | ${cell(edge.limitations.join("; ") || "Sin limitaciones adicionales")} |`), ""].join("\n");
 }
 
-function renderMicroserviceMermaid(graph: KnowledgeGraph, facts: readonly Fact[]): string {
+function renderMicroserviceMermaid(graph: KnowledgeGraph, facts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
   const edges = graph.edges.filter((edge) => edge.type === "calls_http");
-  if (edges.length === 0) return "flowchart LR\n  empty[\"Sin llamadas HTTP detectadas\"]";
-  const ids = new Map<string, string>(), label = (nodeId: string) => graph.nodes.find((node) => node.id === nodeId)?.label ?? nodeId, id = (nodeId: string) => { let value = ids.get(nodeId); if (!value) { value = `s${ids.size}`; ids.set(nodeId, value); } return value; };
-  const lines = ["flowchart LR"], seen = new Set<string>();
-  for (const edge of edges) { const key = `${edge.from}\u0000${edge.to}\u0000${relationLabel(edge, facts)}\u0000${edge.status}`; if (seen.has(key)) continue; seen.add(key); const arrow = edge.status === "supported" ? "-->" : "-.->"; lines.push(`  ${id(edge.from)}["${escapeMermaid(label(edge.from))}"] ${arrow}|"${escapeMermaid(relationLabel(edge, facts))}"| ${id(edge.to)}["${escapeMermaid(label(edge.to))}"]`); }
+  const componentNodes = graph.nodes.filter((node) => node.type === "component");
+  if (componentNodes.length === 0 && edges.length === 0) return "flowchart LR\n  empty[\"Sin sistemas ni llamadas HTTP detectadas\"]";
+  const ids = new Map<string, string>(), id = (nodeId: string) => { let value = ids.get(nodeId); if (!value) { value = `s${ids.size}`; ids.set(nodeId, value); } return value; };
+  const lines = ["flowchart LR"];
+  const grouped = new Map<RepositoryGroup, Array<{ nodeId: string; profile: RepositoryProfile }>>([
+    ["clients", []], ["services", []], ["components", []]
+  ]);
+  for (const node of componentNodes) {
+    const repositoryId = node.id.startsWith("component:") ? node.id.slice("component:".length) : node.label;
+    const profile = repositoryProfile(repositoryId, facts, profileOverrides);
+    grouped.get(profile.group)!.push({ nodeId: node.id, profile });
+  }
+  const groupLabels: Record<RepositoryGroup, string> = { clients: "Aplicaciones cliente independientes", services: "Microservicios y APIs independientes", components: "Otros sistemas independientes" };
+  for (const group of ["clients", "services", "components"] as const) {
+    const items = grouped.get(group)!;
+    if (items.length === 0) continue;
+    lines.push(`  subgraph ${group}["${groupLabels[group]}"]`, "    direction TB");
+    for (const item of items.sort((a, b) => a.profile.label.localeCompare(b.profile.label))) {
+      const nodeLabel = `${item.profile.label} · ${item.profile.type_label}${item.profile.domain === null ? "" : ` · Dominio: ${item.profile.domain}`}`;
+      lines.push(`    ${id(item.nodeId)}["${escapeMermaid(nodeLabel)}"]`);
+    }
+    lines.push("  end");
+  }
+  const externalNodeIds = new Set(edges.flatMap((edge) => [edge.from, edge.to]).filter((nodeId) => !nodeId.startsWith("component:")));
+  if (externalNodeIds.size > 0) {
+    lines.push('  subgraph externals["Sistemas externos o destinos no resueltos"]', "    direction TB");
+    for (const nodeId of [...externalNodeIds].sort()) {
+      const nodeLabel = graph.nodes.find((node) => node.id === nodeId)?.label ?? nodeId;
+      lines.push(`    ${id(nodeId)}["${escapeMermaid(nodeLabel)}"]`);
+    }
+    lines.push("  end");
+  }
+  const seen = new Set<string>();
+  for (const edge of edges) { const key = `${edge.from}\u0000${edge.to}\u0000${relationLabel(edge, facts)}\u0000${edge.status}`; if (seen.has(key)) continue; seen.add(key); const arrow = edge.status === "supported" ? "-->" : "-.->"; lines.push(`  ${id(edge.from)} ${arrow}|"${escapeMermaid(relationLabel(edge, facts))}"| ${id(edge.to)}`); }
   return lines.join("\n");
 }
 
-function renderServiceRelations(repositoryId: string, graph: KnowledgeGraph, facts: readonly Fact[]): string {
+function renderServiceRelations(repositoryId: string, graph: KnowledgeGraph, facts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
   const componentId = `component:${repositoryId}`, edges = graph.edges.filter((edge) => edge.type === "calls_http" && (edge.from === componentId || edge.to === componentId));
   if (edges.length === 0) return "No se detectaron relaciones HTTP entrantes o salientes para este servicio.";
   const label = (id: string) => graph.nodes.find((node) => node.id === id)?.label ?? id;
-  return ["| Dirección | Otro sistema | Llamada | Estado | Limitaciones |", "|---|---|---|---|---|", ...edges.map((edge) => `| ${edge.from === componentId ? "saliente" : "entrante"} | ${cell(label(edge.from === componentId ? edge.to : edge.from))} | ${cell(relationLabel(edge, facts))} | ${edge.status} | ${cell(edge.limitations.join("; ") || "Sin limitaciones adicionales")} |`)].join("\n");
+  const otherType = (nodeId: string) => nodeId.startsWith("component:") ? repositoryProfile(nodeId.slice("component:".length), facts, profileOverrides).type_label : "Sistema externo";
+  return ["| Dirección | Otro sistema independiente | Tipo | Llamada | Estado | Limitaciones |", "|---|---|---|---|---|---|", ...edges.map((edge) => { const otherId = edge.from === componentId ? edge.to : edge.from; return `| ${edge.from === componentId ? "saliente" : "entrante"} | ${cell(label(otherId))} | ${cell(otherType(otherId))} | ${cell(relationLabel(edge, facts))} | ${edge.status} | ${cell(edge.limitations.join("; ") || "Sin limitaciones adicionales")} |`; })].join("\n");
+}
+
+function repositoryProfile(repositoryId: string, facts: readonly Fact[], overrides: RepositoryProfileOverrides): RepositoryProfile {
+  const override = overrides[repositoryId] ?? {};
+  const repositoryFacts = facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
+  const explicitType = override.type?.trim().toLocaleLowerCase("en-US").replace(/[ -]+/gu, "_");
+  let group: RepositoryGroup;
+  let typeLabel: string;
+  if (explicitType === "mobile_application" || explicitType === "mobile_app") { group = "clients"; typeLabel = "Aplicación móvil"; }
+  else if (explicitType === "web_application" || explicitType === "web_app") { group = "clients"; typeLabel = "Aplicación web"; }
+  else if (explicitType === "client_application" || explicitType === "client") { group = "clients"; typeLabel = "Aplicación cliente"; }
+  else if (explicitType === "microservice" || explicitType === "microservicio") { group = "services"; typeLabel = "Microservicio independiente"; }
+  else if (explicitType === "service" || explicitType === "api") { group = "services"; typeLabel = "Servicio/API independiente"; }
+  else if (explicitType === "library" || explicitType === "biblioteca") { group = "components"; typeLabel = "Biblioteca independiente"; }
+  else {
+    const isMobile = repositoryFacts.some((fact) => fact.kind === "package_dependency" && /^(react-native|expo)$/u.test(String(asRecord(fact.value).package ?? asRecord(fact.value).name ?? "")));
+    const isClient = isMobile || repositoryFacts.some((fact) => fact.kind === "ui_route" || fact.kind === "ui_component");
+    const exposesHttp = repositoryFacts.some((fact) => fact.kind === "http_endpoint" || fact.kind === "http_endpoint_fragment");
+    if (isMobile) { group = "clients"; typeLabel = "Aplicación móvil inferida"; }
+    else if (isClient && !exposesHttp) { group = "clients"; typeLabel = "Aplicación cliente inferida"; }
+    else if (exposesHttp && !isClient) { group = "services"; typeLabel = "Servicio/API inferido"; }
+    else { group = "components"; typeLabel = "Sistema independiente"; }
+  }
+  return { id: repositoryId, label: override.label?.trim() || repositoryId, domain: override.domain?.trim() || null, group, type_label: typeLabel };
 }
 
 function relationLabel(edge: GraphEdge, facts: readonly Fact[]): string {

@@ -5,6 +5,15 @@ const BINARY_EXTENSIONS = new Set([".dll", ".exe", ".class", ".jar", ".zip", ".p
 const LANGUAGE_BY_EXTENSION = { ".cs": "c_sharp", ".java": "java", ".ts": "typescript", ".tsx": "tsx", ".js": "javascript", ".jsx": "javascript", ".py": "python", ".xml": "xml", ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml" };
 const MANIFESTS = new Set(["package.json", "angular.json", "pom.xml", "build.gradle", "build.gradle.kts", "pyproject.toml", "requirements.txt", "web.xml", "weblogic.xml", "application.xml"]);
 export async function buildInventory(reader, options = {}) {
+    return await buildInventoryInternal(reader, null, null, options);
+}
+/** Rebuild the current tree while reopening only files reported by Git as changed. */
+export async function buildIncrementalInventory(reader, previous, changedPaths, options = {}) {
+    if (previous.repository_id !== reader.snapshot.repository_id)
+        throw new Error("El inventario base pertenece a otro repositorio.");
+    return await buildInventoryInternal(reader, previous, changedPaths, options);
+}
+async function buildInventoryInternal(reader, previous, changedPaths, options) {
     const maxFileBytes = options.maxFileBytes ?? 2 * 1024 * 1024;
     const maxFiles = options.maxFiles ?? 100_000;
     const entries = [...await reader.list()].sort((a, b) => compareBytes(a.relative_path, b.relative_path));
@@ -12,10 +21,24 @@ export async function buildInventory(reader, options = {}) {
         throw new Error(`El snapshot contiene ${entries.length} entradas; límite ${maxFiles}.`);
     const files = [];
     const diagnostics = [];
-    const technologySignals = new Set();
+    const technologySignals = previous === null ? new Set() : technologySignalsFromInventory(previous);
+    const previousFiles = new Map((previous?.files ?? []).map((file) => [file.relative_path, file]));
     let excluded = 0, failed = 0, unsupported = 0, processed = 0;
     const exclusionReasons = {};
     for (const entry of entries) {
+        const reusable = changedPaths !== null && !changedPaths.has(entry.relative_path) ? previousFiles.get(entry.relative_path) : undefined;
+        if (reusable !== undefined) {
+            files.push({ ...reusable });
+            if (reusable.excluded_reason !== null) {
+                excluded += 1;
+                exclusionReasons[reusable.excluded_reason] = (exclusionReasons[reusable.excluded_reason] ?? 0) + 1;
+            }
+            else if (reusable.language === null && !isManifest(reusable.relative_path))
+                unsupported += 1;
+            else
+                processed += 1;
+            continue;
+        }
         const reason = exclusionReason(entry.relative_path, entry.kind, entry.size, maxFileBytes);
         if (reason !== null) {
             excluded += 1;
@@ -47,6 +70,16 @@ export async function buildInventory(reader, options = {}) {
     const candidate_stacks = detectCandidateStacks(reader.snapshot.repository_id, files, technologySignals);
     const eligible = entries.length - excluded;
     return { schema_version: 3, repository_id: reader.snapshot.repository_id, snapshot_id: reader.snapshot.id, projects, files, candidate_stacks, coverage: { discovered: entries.length, excluded, eligible, processed, failed, unsupported, not_scanned: eligible - processed - failed - unsupported, capabilities: [], exclusion_reasons: exclusionReasons }, diagnostics };
+}
+function technologySignalsFromInventory(inventory) {
+    const result = new Set();
+    const mapping = { dotnet: "dotnet", "java-spring": "spring", "java-weblogic": "jee", "js-angular": "angular", "js-react": "react", "node-express": "express" };
+    for (const candidate of inventory.candidate_stacks) {
+        const signal = mapping[candidate.plugin_id];
+        if (signal !== undefined)
+            result.add(signal);
+    }
+    return result;
 }
 function exclusionReason(path, kind, size, maxBytes) {
     const segments = path.split("/");

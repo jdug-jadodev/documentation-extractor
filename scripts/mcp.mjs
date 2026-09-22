@@ -1,9 +1,9 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { assertNode24, exists, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, exists, handleScriptError, packageRoot } from "./shared.mjs";
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   const modulePath = join(packageRoot, "dist", "mcp.js");
   if (!(await exists(modulePath))) throw Object.assign(new Error("Release incompleta: falta dist/mcp.js. Ejecuta el build explícitamente como desarrollador."), { exitCode: 2 });
   const configIndex = process.argv.indexOf("--config");

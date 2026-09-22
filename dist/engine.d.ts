@@ -6,6 +6,16 @@ export interface RepositoryExtraction {
     snapshot: Snapshot;
     inventory: Inventory;
     bundle: FactBundle;
+    update: {
+        mode: "full" | "incremental" | "reused";
+        changed_paths: string[];
+        reprocessed_paths: string[];
+        reused_files: number;
+    };
+}
+export interface IncrementalScenarioOptions {
+    baseline_run_id: string;
+    changed_paths: Readonly<Record<string, readonly string[]>>;
 }
 export interface DeterministicScenarioRun {
     run_id: string;
@@ -27,6 +37,7 @@ export declare function runDeterministicScenario(input: {
     workingTreePaths?: Readonly<Record<string, readonly string[]>>;
     validator: ContractValidator;
     signal?: AbortSignal;
+    incremental?: IncrementalScenarioOptions;
 }): Promise<DeterministicScenarioRun>;
 export declare function runDeterministicExtraction(input: {
     packageRoot: string;

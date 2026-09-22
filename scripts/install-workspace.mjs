@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { applyEdits, modify, parse } from "jsonc-parser";
-import { assertNode24, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, handleScriptError, packageRoot } from "./shared.mjs";
 
 function argument(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -41,7 +41,7 @@ async function copy(source, target, force) {
 }
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   const workspaceArgument = argument("--workspace");
   const vaultArgument = argument("--vault");
   if (!workspaceArgument || !vaultArgument) throw Object.assign(new Error("Uso: pnpm workspace:install -- --workspace <archivo.code-workspace> --vault <bóveda> [--repository-ids id1,id2] [--branch main] [--force]"), { exitCode: 2 });

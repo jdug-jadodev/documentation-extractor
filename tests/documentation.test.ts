@@ -107,7 +107,10 @@ test("la bóveda genera arquitectura, relaciones y un Mermaid por endpoint", asy
   };
   const model = createDocumentModel({ runId: "run-diagrams", title: "Login", snapshots: [snapshot], facts, graph, archifyAvailable: false });
   const root = await mkdtemp(join(tmpdir(), "docsys-vault-"));
-  await buildCandidateVault(root, model, graph, new Map([["login", model]]), facts);
+  await buildCandidateVault(root, model, graph, new Map([["login", model]]), facts, {
+    web: { type: "mobile_application", label: "Aplicación web móvil" },
+    login: { type: "microservice", label: "Servicio de login" }
+  });
   const flow = await readFile(join(root, "Servicios", "login", branchKey("main"), "flujos", "post-login.md"), "utf8");
   const service = await readFile(join(root, "Servicios", "login", branchKey("main"), "diagramas", "arquitectura.md"), "utf8");
   const outgoing = await readFile(join(root, "Servicios", "login", branchKey("main"), "flujos", "salida-get-status-url-health.md"), "utf8");
@@ -119,4 +122,10 @@ test("la bóveda genera arquitectura, relaciones y un Mermaid por endpoint", asy
   assert.match(outgoing, /Salida GET \$\{STATUS_URL\}\/health/u);
   assert.match(outgoing, /status externo/u);
   assert.match(relations, /web.*POST \$\{LOGIN_URL\}\/login.*login/su);
+  assert.match(relations, /Aplicaciones cliente independientes/u);
+  assert.match(relations, /Microservicios y APIs independientes/u);
+  assert.match(relations, /Aplicación web móvil · Aplicación móvil/u);
+  assert.match(relations, /Servicio de login · Microservicio independiente/u);
+  assert.match(service, /subgraph boundary\["Microservicio independiente · Servicio de login"\]/u);
+  assert.match(service, /\n  end\n  rel/u);
 });

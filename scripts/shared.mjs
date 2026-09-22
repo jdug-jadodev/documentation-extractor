@@ -18,10 +18,10 @@ export async function readPackage() {
   return JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 }
 
-export function assertNode24() {
+export function assertSupportedNode() {
   const major = Number(process.versions.node.split(".")[0]);
-  if (major !== 24) {
-    const error = new Error(`Se requiere Node.js 24.x; versión detectada: ${process.versions.node}. Usa NVM y ejecuta: nvm use 24.21.0`);
+  if (!Number.isInteger(major) || major < 20 || major >= 25) {
+    const error = new Error(`Se requiere Node.js 20.x–24.x; versión detectada: ${process.versions.node}. En el entorno empresarial usa NVM y ejecuta: nvm use 20`);
     error.exitCode = 2;
     throw error;
   }

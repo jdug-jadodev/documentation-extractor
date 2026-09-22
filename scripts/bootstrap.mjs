@@ -5,7 +5,7 @@ import { delimiter, join } from "node:path";
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { assertNode24, exists, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, exists, handleScriptError, packageRoot } from "./shared.mjs";
 
 async function installDependencies() {
   const pnpmLock = join(packageRoot, "pnpm-lock.yaml");
@@ -24,7 +24,7 @@ async function installDependencies() {
 }
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   const distCli = join(packageRoot, "dist", "cli.js");
   if (!(await exists(distCli))) throw Object.assign(new Error("Release incompleta: falta dist/cli.js. El usuario no debe compilar al iniciar."), { exitCode: 2 });
   const dependencyMarker = join(packageRoot, "node_modules", "ajv", "package.json");

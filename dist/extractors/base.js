@@ -19,7 +19,7 @@ export class PatternExtractorPlugin {
         return inventory.candidate_stacks.filter((item) => item.plugin_id === this.id);
     }
     async extract(reader, component, options) {
-        const entries = [...await reader.list()].filter((entry) => entry.kind === "blob").sort((a, b) => compareBytes(a.relative_path, b.relative_path));
+        const entries = [...await reader.list()].filter((entry) => entry.kind === "blob" && (options.include_paths === undefined || options.include_paths.has(entry.relative_path))).sort((a, b) => compareBytes(a.relative_path, b.relative_path));
         const evidence = [];
         const facts = [];
         const diagnostics = [];

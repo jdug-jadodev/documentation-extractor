@@ -1,10 +1,10 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfiguration, configurationState } from "./config.js";
 import { preflight } from "./preflight.js";
 import { GitSnapshotReader } from "./snapshots/git_reader.js";
 import { WorkingTreeSnapshotReader } from "./snapshots/working_tree.js";
-import { buildInventory } from "./discovery/inventory.js";
+import { buildIncrementalInventory, buildInventory } from "./discovery/inventory.js";
 import { PluginRegistry } from "./extractors/registry.js";
 import { buildBundle } from "./bundles.js";
 import { buildGraph } from "./correlation/graph.js";
@@ -34,15 +34,51 @@ export async function runDeterministicScenario(input) {
         const reader = selectedLocalPaths === undefined
             ? committedReader
             : await WorkingTreeSnapshotReader.capture({ root: ready.real_root, repositoryId, baseCommit: committedReader.snapshot.commit_oid, paths: selectedLocalPaths, ...(input.signal === undefined ? {} : { signal: input.signal }) });
-        const inventory = await buildInventory(reader);
         const registry = new PluginRegistry();
+        const fingerprint = extractorFingerprint(registry);
+        const baseline = selectedLocalPaths === undefined && input.incremental !== undefined
+            ? await loadBaseline(config.state_root, input.incremental.baseline_run_id, repositoryId)
+            : null;
+        const requestedChanges = [...new Set(input.incremental?.changed_paths[repositoryId] ?? [])].sort();
+        if (baseline !== null && baseline.snapshot.id === reader.snapshot.id && requestedChanges.length === 0) {
+            extractions.push({ repository_id: repositoryId, snapshot: reader.snapshot, inventory: baseline.inventory, bundle: baseline.bundle, update: { mode: "reused", changed_paths: [], reprocessed_paths: [], reused_files: baseline.inventory.files.length } });
+            continue;
+        }
+        const canIncrement = baseline !== null
+            && baseline.extractor_fingerprint === fingerprint
+            && baseline.snapshot.requested_ref === reader.snapshot.requested_ref
+            && !requestedChanges.some(isStructuralPath);
+        const invalidatedPaths = canIncrement ? expandInvalidatedPaths(new Set(requestedChanges), baseline.bundle) : new Set();
+        const inventory = canIncrement
+            ? await buildIncrementalInventory(reader, baseline.inventory, invalidatedPaths)
+            : await buildInventory(reader);
         const results = [];
         for (const plugin of registry.list()) {
             for (const candidate of await plugin.detect(inventory)) {
-                results.push(await plugin.extract(reader, candidate, { max_file_bytes: 2 * 1024 * 1024, grammar_root: join(input.packageRoot, "assets", "grammars"), ...(input.signal === undefined ? {} : { signal: input.signal }) }));
+                results.push(await plugin.extract(reader, candidate, {
+                    max_file_bytes: 2 * 1024 * 1024,
+                    grammar_root: join(input.packageRoot, "assets", "grammars"),
+                    ...(canIncrement ? { include_paths: invalidatedPaths } : {}),
+                    ...(input.signal === undefined ? {} : { signal: input.signal }),
+                }));
             }
         }
-        extractions.push({ repository_id: repositoryId, snapshot: reader.snapshot, inventory, bundle: buildBundle(reader.snapshot, results, inventory.coverage) });
+        const bundle = canIncrement
+            ? mergeIncrementalBundle(reader.snapshot, baseline.bundle, results, inventory, invalidatedPaths)
+            : buildBundle(reader.snapshot, results, inventory.coverage);
+        const currentPaths = new Set(inventory.files.map((file) => file.relative_path));
+        extractions.push({
+            repository_id: repositoryId,
+            snapshot: reader.snapshot,
+            inventory,
+            bundle,
+            update: {
+                mode: canIncrement ? "incremental" : "full",
+                changed_paths: requestedChanges,
+                reprocessed_paths: canIncrement ? [...invalidatedPaths].filter((path) => currentPaths.has(path)).sort() : inventory.files.map((file) => file.relative_path),
+                reused_files: canIncrement ? inventory.files.filter((file) => !invalidatedPaths.has(file.relative_path)).length : 0,
+            },
+        });
     }
     const aliases = readAliases(config.overrides);
     const snapshots = extractions.map((item) => item.snapshot);
@@ -78,6 +114,9 @@ export async function runDeterministicScenario(input) {
             ...repositoryIds.flatMap((id) => [{ id: `inventory:${id}`, status: "completed" }, { id: `extract:${id}`, status: "completed" }]),
             { id: "graph", status: "completed" },
         ],
+        extractor_fingerprint: extractorFingerprint(new PluginRegistry()),
+        incremental_base_run_id: input.incremental?.baseline_run_id ?? null,
+        repository_updates: Object.fromEntries(extractions.map((item) => [item.repository_id, item.update])),
         usage: { ai_invocations: 0, provider_turns: null, input_tokens: null, output_tokens: null, provider_amount: null, unit: null, source: "deterministic", observation_scope: runId, observed_at: new Date().toISOString() },
     }, null, 2)}\n`);
     return { run_id: runId, repositories: extractions, graph, run_root: runRoot, ai_invocations: 0 };
@@ -95,5 +134,82 @@ function readAliases(overrides) {
     if (!aliases || typeof aliases !== "object" || Array.isArray(aliases))
         return {};
     return Object.fromEntries(Object.entries(aliases).filter((entry) => typeof entry[1] === "string"));
+}
+async function loadBaseline(stateRoot, runId, repositoryId) {
+    if (!/^run-[A-Za-z0-9._-]+$/u.test(runId))
+        throw new Error("run_id base inválido.");
+    try {
+        const root = join(stateRoot, "runs", runId);
+        const run = JSON.parse(await readFile(join(root, "run.json"), "utf8"));
+        const snapshot = run.snapshots?.find((item) => item.repository_id === repositoryId);
+        if (snapshot === undefined)
+            return null;
+        const inventory = JSON.parse(await readFile(join(root, repositoryId, "inventory.json"), "utf8"));
+        const bundle = JSON.parse(await readFile(join(root, repositoryId, "bundle.json"), "utf8"));
+        if (inventory.snapshot_id !== snapshot.id || bundle.snapshot_id !== snapshot.id)
+            throw new Error(`La base incremental de ${repositoryId} es inconsistente.`);
+        return { snapshot, inventory, bundle, extractor_fingerprint: run.extractor_fingerprint ?? null };
+    }
+    catch (error) {
+        if (error.code === "ENOENT")
+            return null;
+        throw error;
+    }
+}
+function extractorFingerprint(registry) {
+    return stableId("extractors", registry.list().map((plugin) => ({ id: plugin.id, version: plugin.version, rules: plugin.rule_versions })));
+}
+function isStructuralPath(path) {
+    return /(^|\/)(?:package\.json|angular\.json|pom\.xml|build\.gradle(?:\.kts)?|pyproject\.toml|requirements\.txt|web\.xml|weblogic\.xml|application\.xml|[^/]+\.csproj)$/iu.test(path);
+}
+function expandInvalidatedPaths(initial, baseline) {
+    const result = new Set(initial);
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const fact of baseline.facts) {
+            if (fact.kind !== "module_dependency" || fact.value === null || typeof fact.value !== "object" || Array.isArray(fact.value))
+                continue;
+            const source = typeof fact.value.source_path === "string" ? fact.value.source_path : null;
+            const target = typeof fact.value.target_path === "string" ? fact.value.target_path : null;
+            if (source !== null && target !== null && result.has(target) && !result.has(source)) {
+                result.add(source);
+                changed = true;
+            }
+        }
+    }
+    return result;
+}
+function mergeIncrementalBundle(snapshot, baseline, delta, inventory, invalidatedPaths) {
+    const evidenceMap = new Map();
+    const evidenceIds = new Map();
+    for (const item of baseline.evidence) {
+        if (invalidatedPaths.has(item.relative_path))
+            continue;
+        const id = stableId("evidence", snapshot.id, item.relative_path, item.locator.start, item.locator.end, item.rule_id);
+        const rebased = { ...item, id, snapshot_id: snapshot.id };
+        evidenceMap.set(id, rebased);
+        evidenceIds.set(item.id, id);
+    }
+    const facts = [];
+    for (const fact of baseline.facts) {
+        const mapped = fact.evidence_ids.map((id) => evidenceIds.get(id)).filter((id) => id !== undefined);
+        if (mapped.length !== fact.evidence_ids.length || mapped.length === 0)
+            continue;
+        facts.push({ ...fact, id: stableId("fact", fact.component_id, fact.kind, fact.value, ...mapped), evidence_ids: mapped });
+    }
+    const diagnostics = baseline.diagnostics
+        .filter((item) => !invalidatedPaths.has(item.scope))
+        .map((item) => ({ ...item, id: stableId("diagnostic", snapshot.id, item.scope, item.code, item.message) }));
+    const merged = {
+        plugin_id: "incremental-merge",
+        plugin_version: "1.0.0",
+        facts: [...facts, ...delta.flatMap((item) => item.facts)],
+        evidence: [...evidenceMap.values(), ...delta.flatMap((item) => item.evidence)],
+        diagnostics: [...diagnostics, ...delta.flatMap((item) => item.diagnostics)],
+        coverage_by_capability: baseline.coverage.capabilities,
+        dependencies: inventory.files.map((file) => file.relative_path),
+    };
+    return buildBundle(snapshot, [merged], inventory.coverage);
 }
 //# sourceMappingURL=engine.js.map

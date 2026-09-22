@@ -9,7 +9,7 @@ import { stableId } from "./platform/hash.js";
 import { queryFacts, renderFactTable, type QueryCategory } from "./query.js";
 import { createDocumentModel } from "./documentation/model.js";
 import { renderDocument } from "./documentation/render.js";
-import { buildCandidateVault } from "./obsidian/vault.js";
+import { buildCandidateVault, type RepositoryProfileOverride, type RepositoryProfileOverrides } from "./obsidian/vault.js";
 import { validateDocument } from "./review/validators.js";
 import { loadArchifySkill } from "./documentation/skill.js";
 import { createAutomaticPublicationReceipt } from "./review/approval.js";
@@ -52,12 +52,30 @@ export async function prepareRunDocumentation(packageRoot: string, config: Effec
   }));
   const candidate = join(artifacts.root, "candidate-vault");
   await rm(candidate, { recursive: true, force: true });
-  await buildCandidateVault(candidate, model, artifacts.graph, serviceModels, artifacts.facts);
+  await buildCandidateVault(candidate, model, artifacts.graph, serviceModels, artifacts.facts, repositoryProfileOverrides(config.overrides));
   const rendered = renderDocument(model);
   const issues = validateDocument(model, { facts: artifacts.facts, evidence: artifacts.evidence, graph: artifacts.graph, rendered });
   await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);
   await atomicWrite(join(artifacts.root, "review.json"), `${JSON.stringify({ schema_version: 3, run_id: runId, issues, unresolved_questions: [], status: issues.some((item) => item.severity === "error" || item.severity === "security") ? "review_required" : "review", archify: { skill_status: skill.status, mode: skill.mode, sha256: skill.sha256, implementation: skill.implementation } }, null, 2)}\n`);
   return { status: "review" as const, run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
+}
+
+function repositoryProfileOverrides(overrides: Record<string, unknown> | undefined): RepositoryProfileOverrides {
+  const metadata = asObject(overrides?.repository_metadata);
+  const result: Record<string, RepositoryProfileOverride> = {};
+  for (const [repositoryId, rawProfile] of Object.entries(metadata)) {
+    const profile = asObject(rawProfile);
+    const normalized: RepositoryProfileOverride = {};
+    if (typeof profile.type === "string") normalized.type = profile.type;
+    if (typeof profile.label === "string") normalized.label = profile.label;
+    if (typeof profile.domain === "string") normalized.domain = profile.domain;
+    result[repositoryId] = normalized;
+  }
+  return result;
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 export async function prepareAndPublishDocumentation(packageRoot: string, config: EffectiveConfiguration, runId: string) {

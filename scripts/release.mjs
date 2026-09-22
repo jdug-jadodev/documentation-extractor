@@ -1,10 +1,10 @@
-import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
+import { readFile, writeFile, mkdir, cp, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, relative } from "node:path";
-import { assertNode24, handleScriptError, packageRoot } from "./shared.mjs";
+import { assertSupportedNode, handleScriptError, packageRoot } from "./shared.mjs";
 
 async function main() {
-  assertNode24();
+  assertSupportedNode();
   const evidencePath = join(packageRoot, ".knowledge", "test-evidence", "release-approval.json");
   let evidence;
   try { evidence = JSON.parse(await readFile(evidencePath, "utf8")); } catch { throw Object.assign(new Error("No se genera una release sin evidencia de tipos, build y pruebas autorizadas."), { exitCode: 3 }); }
@@ -20,12 +20,19 @@ async function main() {
     const data = await readFile(path);
     manifest.push({ path: relative(target, path).replaceAll("\\", "/"), sha256: createHash("sha256").update(data).digest("hex"), size: data.byteLength });
   }
-  const { glob } = await import("node:fs/promises");
-  for await (const path of glob("**/*", { cwd: target })) {
-    try { await record(join(target, path)); } catch { /* directories are intentionally skipped */ }
-  }
+  for (const path of await listFiles(target)) await record(path);
   manifest.sort((a, b) => Buffer.from(a.path).compare(Buffer.from(b.path)));
   await writeFile(join(target, "release-manifest.json"), JSON.stringify({ schema_version: 3, node: process.versions.node, files: manifest }, null, 2) + "\n", "utf8");
+}
+
+async function listFiles(root) {
+  const files = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) files.push(...await listFiles(path));
+    else if (entry.isFile()) files.push(path);
+  }
+  return files;
 }
 
 main().catch(handleScriptError);

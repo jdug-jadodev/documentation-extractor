@@ -5,7 +5,7 @@
   "description": "Motor local determinista de documentación arquitectónica para Obsidian",
   "type": "module",
   "engines": {
-    "node": ">=24 <25",
+    "node": ">=20 <25",
     "pnpm": ">=10 <11"
   },
   "packageManager": "pnpm@10.0.0",
@@ -35,7 +35,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "24.13.6",
+    "@types/node": "20.19.43",
     "tree-sitter-wasm": "2.0.2",
     "typescript": "7.0.2"
   }

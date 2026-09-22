@@ -163,6 +163,8 @@ export interface ExtractionOptions {
   signal?: AbortSignal;
   max_file_bytes: number;
   grammar_root: string;
+  /** When present, extractors read only these paths while retaining the full snapshot for resolution. */
+  include_paths?: ReadonlySet<string>;
 }
 
 export interface GraphNode {
