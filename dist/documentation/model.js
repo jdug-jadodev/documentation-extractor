@@ -33,14 +33,26 @@ function factualSection(id, facts, graph, snapshots) {
         base.paragraphs.push("Describe exclusivamente hechos extraídos de las capturas indicadas; no acredita comportamiento en producción.");
     if (id === "contexto")
         base.paragraphs.push("Los repositorios permanecen fuera de la boveda. Las relaciones declaradas se clasifican por evidencia estática.");
-    if (id === "interfaces")
-        base.tables.push({ headers: ["Componente", "Método", "Ruta", "Evidencia"], rows: (facts.get("http_endpoint") ?? []).map((fact) => { const value = record(fact.value); return [fact.component_id, stringify(value.method), stringify(value.path), fact.evidence_ids.join(", ")]; }) });
+    if (id === "interfaces") {
+        const endpoints = [...(facts.get("http_endpoint") ?? []), ...(facts.get("http_endpoint_fragment") ?? [])];
+        const clients = [...(facts.get("http_client_call") ?? []), ...(facts.get("http_client_base") ?? [])];
+        base.tables.push({
+            headers: ["Componente", "Dirección", "Método", "Ruta o expresión", "Estado", "Evidencia"],
+            rows: [
+                ...endpoints.map((fact) => { const value = record(fact.value); return [fact.component_id, "entrada", stringify(value.method), stringify(value.path), stringify(value.route_scope ?? "observado"), fact.evidence_ids.join(", ")]; }),
+                ...clients.map((fact) => { const value = record(fact.value); return [fact.component_id, "salida", stringify(value.method), stringify(value.path_expression ?? value.base_url ?? value.target), value.resolved === false || value.target === null ? "no resuelto" : "observado", fact.evidence_ids.join(", ")]; })
+            ]
+        });
+        const mounts = facts.get("http_route_mount") ?? [];
+        if (mounts.length > 0)
+            base.tables.push({ headers: ["Componente", "Montaje observado", "Router", "Evidencia"], rows: mounts.map((fact) => { const value = record(fact.value); return [fact.component_id, stringify(value.path), stringify(value.router_symbol), fact.evidence_ids.join(", ")]; }) });
+    }
     if (id === "responsabilidades")
         base.tables.push({ headers: ["Componente", "Hechos", "Límites"], rows: [...new Set([...facts.values()].flat().map((fact) => fact.component_id))].map((component) => [component, String([...facts.values()].flat().filter((fact) => fact.component_id === component).length), "La intención de negocio requiere revisión humana."]) });
     if (id === "datos")
         base.tables.push({ headers: ["Componente", "Tipo", "Valor", "Evidencia"], rows: [...(facts.get("data_entity") ?? []), ...(facts.get("data_read") ?? []), ...(facts.get("data_write") ?? [])].map((fact) => [fact.component_id, fact.kind, stringify(fact.value), fact.evidence_ids.join(", ")]) });
     if (id === "arquitectura" || id === "flujos")
-        base.tables.push({ headers: ["Origen", "Relación", "Destino", "Estado", "Evidencia"], rows: graph.edges.map((edge) => [edge.from, edge.type, edge.to, edge.status, edge.evidence_ids.join(", ")]) });
+        base.tables.push({ headers: ["Origen", "Relación", "Destino", "Estado", "Evidencia"], rows: graph.edges.map((edge) => [nodeLabel(graph, edge.from), edge.type, nodeLabel(graph, edge.to), edge.status, edge.evidence_ids.join(", ")]) });
     if (id === "seguridad") {
         base.paragraphs.push("La autenticación y autorización se mantienen como desconocidas salvo evidencia explícita.");
         base.limitations.push("El análisis estático no demuestra controles efectivos en despliegue.");
@@ -54,13 +66,14 @@ function factualSection(id, facts, graph, snapshots) {
     if (id === "decisiones")
         base.paragraphs.push("No se aprobaron decisiones ni propuestas automáticamente.");
     if (id === "evidencias")
-        base.tables.push({ headers: ["Hecho", "Componente", "Regla", "Evidencias"], rows: [...facts.values()].flat().map((fact) => [fact.id, fact.component_id, fact.rule_id, fact.evidence_ids.join(", ")]) });
+        base.tables.push({ headers: ["Hecho", "Componente", "Tipo", "Valor observado", "Regla", "Evidencias"], rows: [...facts.values()].flat().map((fact) => [fact.id, fact.component_id, fact.kind, stringify(fact.value), fact.rule_id, fact.evidence_ids.join(", ")]) });
     if (id === "anexos")
         base.paragraphs.push(`Escenario: ${graph.scenario_id}.`);
     return base;
 }
 function groupFacts(facts) { const result = new Map(); for (const fact of facts)
     result.set(fact.kind, [...(result.get(fact.kind) ?? []), fact]); return result; }
+function nodeLabel(graph, id) { const node = graph.nodes.find((item) => item.id === id); return node ? `${node.label} (${node.type})` : id; }
 function record(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
 function stringify(value) { if (Array.isArray(value))
     return value.join(", "); if (value === null || value === undefined || value === "")

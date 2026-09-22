@@ -26,7 +26,7 @@ import type { QueryCategory } from "./query.js";
 import { atomicWrite } from "./platform/fs.js";
 import { compareRuns, explainRelations, loadRunArtifacts, prepareProposal, queryRunArtifacts, renderRunQueryTable, traceFlow, validatedRunRoot } from "./run_services.js";
 import type { ProposalType } from "./proposal/model.js";
-import type { ApprovalReceipt, PublicationManifest } from "./contracts/types.js";
+import type { ApprovalReceipt, KnowledgeGraph, PublicationManifest } from "./contracts/types.js";
 
 export interface CliOptions { packageRoot?: string; }
 
@@ -174,8 +174,17 @@ async function reviewRun(configPath: string, validator: ContractValidator, runId
   const config = await loadConfiguration(configPath, validator);
   const artifacts = await loadRunArtifacts(config, runId);
   const model = createDocumentModel({ runId, title: `Documentación ${runId}`, snapshots: artifacts.snapshots, facts: artifacts.facts, graph: artifacts.graph, archifyAvailable: false });
+  const serviceModels = new Map(artifacts.snapshots.map((snapshot) => {
+    const repositoryId = snapshot.repository_id;
+    const facts = artifacts.facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
+    const componentId = `component:${repositoryId}`;
+    const edges = artifacts.graph.edges.filter((edge) => edge.from === componentId || edge.to === componentId);
+    const nodeIds = new Set([componentId, ...edges.flatMap((edge) => [edge.from, edge.to])]);
+    const graph: KnowledgeGraph = { ...artifacts.graph, snapshot_ids: [snapshot.id], nodes: artifacts.graph.nodes.filter((node) => nodeIds.has(node.id)), edges };
+    return [repositoryId, createDocumentModel({ runId, title: `Documentación ${repositoryId}`, snapshots: [snapshot], facts, graph, archifyAvailable: false })] as const;
+  }));
   const candidate = join(artifacts.root, "candidate-vault");
-  await buildCandidateVault(candidate, model, artifacts.graph);
+  await buildCandidateVault(candidate, model, artifacts.graph, serviceModels);
   const rendered = renderDocument(model);
   const issues = validateDocument(model, { facts: artifacts.facts, evidence: artifacts.evidence, graph: artifacts.graph, rendered });
   await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);

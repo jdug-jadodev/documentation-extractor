@@ -29,4 +29,4 @@ Las pruebas del motor y del servidor MCP ya fueron autorizadas. La demo, Copilot
 
 ## Estado de pruebas
 
-La suite disponible pasa 34/34. El transporte MCP, sus siete herramientas y un run real de tres repositorios fueron comprobados en Windows sin IA ni publicación. Siguen pendientes la aceptación exhaustiva P01–P112/N01–N16, demo, Obsidian, clientes Copilot reales, Linux/macOS y, solo si se activa expresamente, Azure.
+La suite disponible pasa 36/36. El transporte MCP, sus siete herramientas, un run real de tres repositorios y una sesión real de GitHub Copilot fueron comprobados en Windows sin IA ni publicación. Siguen pendientes la aceptación exhaustiva P01–P112/N01–N16, demo, Obsidian, las demás superficies de Copilot, Linux/macOS y, solo si se activa expresamente, Azure.

@@ -74,7 +74,9 @@ async function main() {
     if (typeof suppliedRunId === "string") {
       const proposal = await request("tools/call", { name: "docsys_prepare_proposal", arguments: { run_id: suppliedRunId, type: "migration", request: "Separar una capacidad en un microservicio sin modificar las aplicaciones ni inventar infraestructura." } });
       if (proposal.isError) throw new Error(`La propuesta MCP falló: ${proposal.content?.[0]?.text ?? "error no detallado"}`);
-      analysisSummary = { analysis_executed: false, reused_run_id: suppliedRunId, proposal_id: proposal.structuredContent?.proposal_id, proposal_status: proposal.structuredContent?.status };
+      const proposalValue = proposal.structuredContent?.proposal;
+      if (!Array.isArray(proposalValue?.tests) || proposalValue.tests.length === 0 || !Array.isArray(proposalValue?.pending_decisions) || proposalValue.pending_decisions.length === 0) throw new Error("La propuesta MCP dejó vacías las pruebas o decisiones pendientes.");
+      analysisSummary = { analysis_executed: false, reused_run_id: suppliedRunId, proposal_id: proposal.structuredContent?.proposal_id, proposal_status: proposal.structuredContent?.status, acceptance_criteria: proposalValue.acceptance_criteria?.length ?? 0, tests: proposalValue.tests.length, pending_decisions: proposalValue.pending_decisions.length };
     }
     process.stdout.write(`${JSON.stringify({ protocol: initialized.protocolVersion, server: initialized.serverInfo, tools: names, configuration: statusValue.configuration, repositories: repositoryValue.repositories.map((repo) => repo.id), automatic_analysis: statusValue.automatic_analysis, ...analysisSummary }, null, 2)}\n`);
   } finally {

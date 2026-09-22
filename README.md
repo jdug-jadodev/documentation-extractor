@@ -4,7 +4,7 @@ Motor local y determinista que extrae hechos de repositorios autorizados, correl
 
 ## Estado
 
-El motor está implementado en `src/`. La suite automatizada disponible pasa 34/34 y el servidor MCP se probó por `stdio` sobre un workspace real de tres repositorios. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado Copilot real, Obsidian, Azure ni la matriz Linux/macOS.
+El motor está implementado en `src/`. La suite automatizada disponible pasa 36/36 y el servidor MCP se probó por `stdio` sobre un workspace real de tres repositorios. También se confirmó una sesión real de GitHub Copilot para estado, análisis y consultas. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado Obsidian, Azure ni la matriz Linux/macOS.
 
 La instalación del motor conserva su `knowledge.yaml` en `configuration_pending`. Cada workspace recibe su propia configuración e integración; los runs privados permanecen en el motor y la bóveda Obsidian es una tercera ubicación separada. Ninguna entrada inicia análisis automáticamente.
 

@@ -333,7 +333,7 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 
 ## 15. Lo que sigue pendiente antes de usarlo como validado
 
-- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 34/34.
+- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 36/36.
 - Autorizar la demo sintética si se desea ejecutarla.
 - Verificar VS Code, Copilot CLI e IntelliJ con sus versiones instaladas.
 - Autorizar cualquier llamada real a Copilot.

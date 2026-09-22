@@ -95,7 +95,7 @@ export async function prepareProposal(config, runId, type, request, humanRequire
     const artifacts = await loadRunArtifacts(config, runId);
     const findings = findingsFromGraph(artifacts.graph);
     const proposal = createProposal({ type, findings, graph: artifacts.graph, evidence: artifacts.evidence, requestedChanges: [request.trim()], humanRequirements });
-    const proposalId = `proposal-${stableId(runId, type, request, humanRequirements).slice(0, 20)}`;
+    const proposalId = proposalIdentifier(runId, type, request, humanRequirements);
     const root = join(artifacts.root, "proposals", proposalId);
     await mkdir(root, { recursive: true });
     const jsonPath = join(root, "proposal.json");
@@ -103,6 +103,9 @@ export async function prepareProposal(config, runId, type, request, humanRequire
     await atomicWrite(jsonPath, `${JSON.stringify({ proposal_id: proposalId, run_id: runId, ...proposal }, null, 2)}\n`);
     await atomicWrite(markdownPath, renderProposal(proposalId, runId, proposal));
     return { proposal_id: proposalId, status: "review_required", json_path: jsonPath, markdown_path: markdownPath, proposal };
+}
+export function proposalIdentifier(runId, type, request, humanRequirements) {
+    return stableId("proposal", runId, type, request, humanRequirements);
 }
 export function validatedRunRoot(stateRoot, runId) {
     if (!/^run-[A-Za-z0-9._-]+$/u.test(runId))

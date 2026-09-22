@@ -7,5 +7,8 @@ export function renderEditionIndex(model: DocumentModel): string {
   for (const snapshot of model.snapshots) lines.push(`- [[${serviceDocumentPath(snapshot)}/document|${snapshot.repository_id} · ${snapshot.requested_ref} · ${snapshot.commit_oid.slice(0, 12)}]]`);
   lines.push("", "## Avisos", "", "- La fecha de captura no demuestra que sea el último commit remoto.", "- Las relaciones muestran evidencia estática, no tráfico observado.", ""); return lines.join("\n");
 }
-export function renderGraphTable(graph: KnowledgeGraph): string { return ["| Origen | Relación | Destino | Estado | Evidencias |", "|---|---|---|---|---|", ...graph.edges.map((edge) => `| ${cell(edge.from)} | ${cell(edge.type)} | ${cell(edge.to)} | ${edge.status} | ${edge.evidence_ids.map(cell).join(", ")} |`)].join("\n"); }
+export function renderGraphTable(graph: KnowledgeGraph): string {
+  const label = (id: string) => { const node = graph.nodes.find((item) => item.id === id); return node ? `${node.label} (${node.type})` : id; };
+  return ["| Origen | Relación | Destino | Estado | Evidencias |", "|---|---|---|---|---|", ...graph.edges.map((edge) => `| ${cell(label(edge.from))} | ${cell(edge.type)} | ${cell(label(edge.to))} | ${edge.status} | ${edge.evidence_ids.map(cell).join(", ")} |`)].join("\n");
+}
 function cell(value: string): string { return value.replaceAll("|", "\\|").replace(/[\r\n]/gu, " "); }
