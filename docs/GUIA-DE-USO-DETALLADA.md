@@ -113,7 +113,7 @@ Para agregar o quitar repositorios, se cambia primero el `.code-workspace` y lue
 4. Trazar un flujo
 5. Preparar propuesta
 6. Consultar hechos
-7. Preparar revisión
+7. Generar documentación en Obsidian (borrador)
 8. Abrir Obsidian
 9. Configurar
 0. Salir
@@ -153,7 +153,7 @@ npm run docs -- consultar messages --run <run-id>
 npm run docs -- consultar data --run <run-id>
 ```
 
-Categorías: `endpoints`, `dependencies`, `messages`, `data`, `coverage` y `evidence`. Omitir `--repo` consulta todos los repositorios del run.
+Categorías: `endpoints`, `dependencies`, `architecture`, `technologies`, `messages`, `data`, `coverage` y `evidence`. Omitir `--repo` consulta todos los repositorios del run.
 
 ## 8. Explicar cómo se comunican dos servicios
 
@@ -224,18 +224,39 @@ npm run docs -- proponer --run <run-id> --tipo adr --solicitud "Evaluar separar 
 
 El borrador incluye estado observado, componentes afectados, contratos, fases, riesgos, pruebas previstas, rollback, alternativas y decisiones pendientes. Siempre queda como `review_required`. No modifica repositorios.
 
-## 12. Revisar, aprobar y publicar en Obsidian
+## 12. Generar y publicar en Obsidian
 
 ```powershell
 npm run docs -- revisar --run <run-id>
-npm run docs -- aprobar --run <run-id>
-npm run docs -- publicar --run <run-id>
+npm run docs -- documentar --run <run-id>
 ```
 
-- `revisar` prepara una bóveda candidata ASD-TSE-100.
-- `aprobar` exige confirmación humana y fija hashes.
-- `publicar` solo acepta ese recibo vigente y crea una edición inmutable.
+- `revisar` es opcional: prepara y valida la bóveda candidata privada sin cambiar la edición visible.
+- `documentar` regenera el candidato, ejecuta las validaciones mecánicas y publica directamente una edición inmutable en `Publicaciones/<edición>`; también actualiza la vista estable `Actual`.
+- No existe un paso de aprobación humana. Los estados `candidate` y `unresolved` no bloquean la documentación: se publican claramente como limitaciones. Solo un error mecánico o de seguridad bloquea la publicación.
 - **Abrir Obsidian** abre la bóveda configurada.
+
+La salida documental contiene:
+
+- `Actual/Servicios/<servicio>/<versión>/servicio.md`: una ficha completa por servicio, no ocho copias parciales.
+- `Actual/Servicios/<servicio>/<versión>/diagramas/arquitectura.md`: Mermaid de responsabilidades y relaciones del servicio.
+- `Actual/Servicios/<servicio>/<versión>/flujos/<metodo-ruta>.md`: un Markdown y un Mermaid independiente por endpoint, con handler y módulos alcanzables por imports estáticos.
+- `Actual/Flujos/end-to-end.md`: índice de todos los flujos y mapa de consumo entre servicios.
+- `Actual/Mapas/microservicios.md`: relaciones HTTP entrantes/salientes con estado, llamada observada, evidencia y limitaciones.
+- `Actual/Mapas/relaciones.md`: arquitectura general compatible con el contrato Archify; Archify queda reservado para esta vista global.
+- `Inicio.md`: enlace corto a `Actual` y al historial inmutable.
+
+Las fichas incluyen clases, funciones, métodos, firmas, llamadas estáticas observadas y una explicación derivada del nombre/código. Esa explicación no se presenta como comportamiento comprobado en ejecución.
+
+Los caminos internos son análisis estático, no una grabación de tráfico ni una garantía del orden de ejecución. Los saltos dudosos permanecen marcados como `candidate` o `unresolved`.
+
+Para que la vista gráfica no mezcle la edición vigente con borradores e históricos, use este filtro en el cuadro de búsqueda del grafo:
+
+```text
+-path:Publicaciones -path:.staging
+```
+
+El publicador intenta guardarlo en `.obsidian/graph.json`, pero una sesión de Obsidian que ya esté abierta puede volver a escribir su estado anterior. En ese caso aplíquelo en la interfaz una vez, o cierre Obsidian antes de publicar.
 
 ## 13. Conectar GitHub Copilot
 
@@ -295,7 +316,9 @@ Los nombres exactos de los menús pueden cambiar entre versiones del plugin, per
 
 El instalador coloca `.github/agents/orquestador.agent.md`, las instrucciones y `archify-documentation` junto al `.code-workspace`. Copilot descubre allí la entrada conversacional, que está limitada a las herramientas `docsys_*`. Los archivos no se copian dentro de las aplicaciones.
 
-El motor, no Copilot, decide qué responsabilidades internas intervienen. Los especialistas interpretativos se generan en un runtime aislado con `tools: []`; Inventariador y Publicador son código. La skill `archify-documentation` se conserva dentro del sistema y se empaqueta en ese runtime cuando se generan perfiles. Por eso las aplicaciones no necesitan saber qué skill o agente elegir.
+El motor, no Copilot, decide qué responsabilidades internas intervienen. Por eso **no se copian los ocho agentes al workspace**: hacerlo les daría una entrada directa que podría saltarse los límites del motor. En el workspace vive solo el agente conversacional de entrada. Inventariador y Publicador son código; los seis especialistas interpretativos se generan en un runtime privado con `tools: []` y reciben únicamente `TaskPacket` saneados. La skill `archify-documentation` se conserva en el motor y también se instala junto al agente de entrada para que el contrato documental sea visible.
+
+Tener los perfiles no significa que ya se hayan ejecutado. Para usarlos de verdad se necesitan Copilot CLI instalado y autenticado, un modelo configurado y autorización explícita de IA. Sin esas condiciones el motor continúa con hechos deterministas, marca la interpretación pendiente y registra `ai_invocations: 0`.
 
 Herramientas MCP disponibles:
 
@@ -306,8 +329,13 @@ Herramientas MCP disponibles:
 - `docsys_trace_flow`: camino entre componentes.
 - `docsys_query`: hechos ya extraídos.
 - `docsys_prepare_proposal`: borrador pendiente de revisión.
+- `docsys_prepare_documentation`: genera fichas, clases/métodos, diagramas de servicio, un Mermaid por endpoint y mapas de relaciones; luego publica automáticamente la edición final en `Actual`.
 
-No existen herramientas MCP para aprobar ni publicar. Esas acciones siguen siendo humanas desde el sistema.
+No existen herramientas MCP separadas para aprobar o publicar: la publicación forma parte de `docsys_prepare_documentation`.
+
+### Archify y los diagramas
+
+La skill `archify-documentation` se usa para la estructura ASD-TSE-100 y el mapa general de arquitectura. Si existe un adaptador Archify externo comprobado, el motor puede registrar `archify.status: executed`. Si no existe, genera el mapa general con Mermaid determinista y registra modo `fallback`; no afirma que Archify externo se ejecutó. Los diagramas por servicio y por endpoint siempre son Mermaid determinista del motor, porque necesitan trazabilidad directa a hechos e imports.
 
 ## 14. Ejemplos de conversación
 
@@ -333,12 +361,13 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 
 ## 15. Lo que sigue pendiente antes de usarlo como validado
 
-- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 36/36.
+- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 42/42.
 - Autorizar la demo sintética si se desea ejecutarla.
 - Verificar VS Code, Copilot CLI e IntelliJ con sus versiones instaladas.
-- Autorizar cualquier llamada real a Copilot.
-- Revisar Obsidian manualmente.
+- Instalar/configurar Copilot CLI y autorizar cualquier llamada real a los especialistas.
+- Revisar visualmente en Obsidian la edición vigente.
+- Configurar y probar un adaptador Archify externo si se requiere algo distinto del Mermaid determinista.
 - Verificar Windows, Linux y macOS.
 - Activar Azure solamente si se decide usarlo.
 
-Estado actual: **motor y MCP probados en Windows; validación completa pendiente**.
+Estado actual: **motor, MCP, extracción arquitectónica y publicación Obsidian probados en Windows; agentes interpretativos, Archify externo y validación completa pendientes**.

@@ -9,7 +9,7 @@ export function renderDocument(model) {
             lines.push(`- ${escapeMarkdown(limitation)}`);
         lines.push("");
     } });
-    lines.push("---", "", "> Documento generado a partir de hechos estructurados. Las inferencias, desconocidos y decisiones requieren revisión humana.", "");
+    lines.push("---", "", "> Documento generado y publicado automáticamente a partir de hechos estructurados. Las inferencias y desconocidos permanecen señalados; las decisiones de diseño continúan siendo propuestas.", "");
     const result = lines.join("\n");
     assertNoKnownSecret(result);
     return result;
@@ -28,6 +28,10 @@ export function renderRelationshipMermaid(model) {
     const table = architecture.tables[0];
     if (!table || table.rows.length === 0)
         return "flowchart LR\n  empty[Sin relaciones sustentadas]";
+    const architecturalRelations = new Set(["calls_http", "publishes_to", "consumes_from", "reads_data", "writes_data"]);
+    const rows = table.rows.filter((row) => architecturalRelations.has(row[1] ?? ""));
+    if (rows.length === 0)
+        return "flowchart LR\n  empty[Sin relaciones arquitectónicas sustentadas]";
     const ids = new Map();
     let counter = 0;
     const id = (label) => { let existing = ids.get(label); if (!existing) {
@@ -35,9 +39,14 @@ export function renderRelationshipMermaid(model) {
         ids.set(label, existing);
     } return existing; };
     const lines = ["flowchart LR"];
-    for (const row of table.rows) {
-        const from = row[0] ?? "?", relation = row[1] ?? "relación", to = row[2] ?? "?";
-        lines.push(`  ${id(from)}["${escapeMermaid(from)}"] -->|"${escapeMermaid(relation)}"| ${id(to)}["${escapeMermaid(to)}"]`);
+    const seen = new Set();
+    for (const row of rows) {
+        const from = row[0] ?? "?", relation = row[1] ?? "relación", to = row[2] ?? "?", status = row[3] ?? "unknown", key = `${from}\u0000${relation}\u0000${to}\u0000${status}`;
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        const arrow = status === "supported" ? "-->" : "-.->";
+        lines.push(`  ${id(from)}["${escapeMermaid(from)}"] ${arrow}|"${escapeMermaid(`${relation} · ${status}`)}"| ${id(to)}["${escapeMermaid(to)}"]`);
     }
     return lines.join("\n");
 }

@@ -3,8 +3,8 @@ export function serviceDocumentPath(snapshot) { return `Servicios/${snapshot.rep
 export function renderEditionIndex(model) {
     const lines = ["# Inicio de la edición", "", `Estado: **${model.status}**`, "", "## Servicios", ""];
     for (const snapshot of model.snapshots)
-        lines.push(`- [[${serviceDocumentPath(snapshot)}/document|${snapshot.repository_id} · ${snapshot.requested_ref} · ${snapshot.commit_oid.slice(0, 12)}]]`);
-    lines.push("", "## Avisos", "", "- La fecha de captura no demuestra que sea el último commit remoto.", "- Las relaciones muestran evidencia estática, no tráfico observado.", "");
+        lines.push(`- [[${serviceDocumentPath(snapshot)}/servicio|${snapshot.repository_id} · ${snapshot.requested_ref} · ${snapshot.commit_oid.slice(0, 12)}]]`);
+    lines.push("", "## Arquitectura", "", "- [[Mapas/relaciones|Arquitectura general compatible con Archify]]", "- [[Mapas/microservicios|Consumo entre microservicios y sistemas externos]]", "- [[Flujos/end-to-end|Índice de flujos con Mermaid por endpoint]]", "", "## Avisos", "", "- La fecha de captura no demuestra que sea el último commit remoto.", "- Las relaciones muestran evidencia estática, no tráfico observado.", "- La publicación es automática; `candidate` y `unresolved` continúan visibles como limitaciones.", "");
     return lines.join("\n");
 }
 export function renderGraphTable(graph) {

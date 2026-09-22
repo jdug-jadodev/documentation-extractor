@@ -1,5 +1,5 @@
 import type { Fact } from "./contracts/types.js";
-export type QueryCategory = "endpoints" | "dependencies" | "messages" | "data" | "coverage" | "evidence";
+export type QueryCategory = "endpoints" | "dependencies" | "messages" | "data" | "architecture" | "technologies" | "coverage" | "evidence";
 export declare function queryFacts(facts: readonly Fact[], category: QueryCategory, options?: {
     componentId?: string;
     offset?: number;

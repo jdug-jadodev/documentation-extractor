@@ -5,11 +5,13 @@ Para consultar o documentar aplicaciones utiliza únicamente las herramientas `d
 - Solo participan repositorios habilitados y miembros del workspace configurado.
 - Si el estado es `Configuración pendiente`, no inicies análisis.
 - Solo llama `docsys_prepare_analysis` cuando el usuario pida expresamente analizar o actualizar.
+- `docsys_prepare_documentation` transforma un run en Markdown ASD-TSE-100, valida mecánicamente y publica automáticamente una edición inmutable y la vista `Actual` en Obsidian.
+- `docsys_prepare_proposal` deja ADRs, especificaciones y migraciones como borradores Markdown en Obsidian.
 - Los hechos, evidencias, limitaciones y contratos `schema_version: 3` son canónicos; el modelo no los modifica.
 - Inventario, extracción, correlación, validación mecánica, consulta y publicación se realizan por código con cero IA.
 - Los especialistas internos reciben contexto mínimo, sin fuentes, herramientas, MCP, red, rutas adicionales u otros agentes.
 - Conserva ASD-TSE-100 en español y la skill real `archify-documentation`; `fallback` no significa ejecución externa.
-- No concedas permisos, gasto fuerte, aprobación humana, publicación o decisiones de ADR/migración.
+- No concedas permisos, gasto fuerte ni decisiones de ADR/migración. La publicación factual de documentación es automática; las propuestas no se convierten en decisiones aprobadas.
 - Obsidian es obligatorio. Azure Pipeline y Azure Repo son opt-in e independientes.
 - No modifiques repositorios de aplicaciones ni instales/ejecutes sus dependencias.
 

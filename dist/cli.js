@@ -12,17 +12,10 @@ import { runDemo } from "./demo.js";
 import { GrammarManager } from "./extractors/grammar.js";
 import { applyLegacyMigration, planLegacyMigration, restoreLegacyConfiguration } from "./migration.js";
 import { openObsidian } from "./obsidian/open.js";
-import { createDocumentModel } from "./documentation/model.js";
-import { buildCandidateVault } from "./obsidian/vault.js";
-import { renderDocument } from "./documentation/render.js";
-import { validateDocument } from "./review/validators.js";
-import { createApprovalReceipt } from "./review/approval.js";
-import { LocalPublicationTarget } from "./publication/local.js";
 import { copyEditionToFolder } from "./publication/folder.js";
 import { verifyPublicationManifest } from "./publication/manifest.js";
 import { restoreEditionIndex } from "./publication/history.js";
-import { atomicWrite } from "./platform/fs.js";
-import { compareRuns, explainRelations, loadRunArtifacts, prepareProposal, queryRunArtifacts, renderRunQueryTable, traceFlow, validatedRunRoot } from "./run_services.js";
+import { compareRuns, explainRelations, loadRunArtifacts, prepareAndPublishDocumentation, prepareProposal, prepareRunDocumentation, queryRunArtifacts, renderRunQueryTable, traceFlow, validatedRunRoot } from "./run_services.js";
 export async function runCli(argv, options = {}) {
     const packageRoot = options.packageRoot ?? resolve(new URL("..", import.meta.url).pathname);
     const jsonMode = argv.includes("--json");
@@ -61,11 +54,9 @@ export async function runCli(argv, options = {}) {
         else if (command === "reanudar")
             result = await resumeStatus(configPath, validator, requiredString(parsed.values.run, "--run"));
         else if (command === "revisar")
-            result = await reviewRun(configPath, validator, requiredString(parsed.values.run, "--run"));
-        else if (command === "aprobar")
-            result = await approveRun(configPath, validator, requiredString(parsed.values.run, "--run"), parsed.values["no-interactivo"] === true);
-        else if (command === "publicar")
-            result = await publishRun(configPath, validator, requiredString(parsed.values.run, "--run"));
+            result = await reviewRun(packageRoot, configPath, validator, requiredString(parsed.values.run, "--run"));
+        else if (command === "documentar")
+            result = await documentRun(packageRoot, configPath, validator, requiredString(parsed.values.run, "--run"));
         else if (command === "consultar")
             result = await queryRun(configPath, validator, parsed.positionals[0] ?? "endpoints", parsed.values);
         else if (command === "compartir")
@@ -137,7 +128,7 @@ async function interactiveMenu(packageRoot, validator) {
         else if (action === "query")
             result = await queryRun(configPath, validator, String(values.categoria ?? "endpoints"), values);
         else
-            result = await reviewRun(configPath, validator, requiredString(values.run, "run"));
+            result = await documentRun(packageRoot, configPath, validator, requiredString(values.run, "run"));
         emit(result, false);
         return 0;
     }
@@ -222,42 +213,14 @@ async function revertMigration(configPath, values) {
     }
 }
 async function openVault(configPath, validator) { const config = await loadConfiguration(configPath, validator); return await openObsidian(config.vault_root); }
-async function reviewRun(configPath, validator, runId) {
+async function reviewRun(packageRoot, configPath, validator, runId) {
     const config = await loadConfiguration(configPath, validator);
-    const artifacts = await loadRunArtifacts(config, runId);
-    const model = createDocumentModel({ runId, title: `Documentación ${runId}`, snapshots: artifacts.snapshots, facts: artifacts.facts, graph: artifacts.graph, archifyAvailable: false });
-    const serviceModels = new Map(artifacts.snapshots.map((snapshot) => {
-        const repositoryId = snapshot.repository_id;
-        const facts = artifacts.facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
-        const componentId = `component:${repositoryId}`;
-        const edges = artifacts.graph.edges.filter((edge) => edge.from === componentId || edge.to === componentId);
-        const nodeIds = new Set([componentId, ...edges.flatMap((edge) => [edge.from, edge.to])]);
-        const graph = { ...artifacts.graph, snapshot_ids: [snapshot.id], nodes: artifacts.graph.nodes.filter((node) => nodeIds.has(node.id)), edges };
-        return [repositoryId, createDocumentModel({ runId, title: `Documentación ${repositoryId}`, snapshots: [snapshot], facts, graph, archifyAvailable: false })];
-    }));
-    const candidate = join(artifacts.root, "candidate-vault");
-    await buildCandidateVault(candidate, model, artifacts.graph, serviceModels);
-    const rendered = renderDocument(model);
-    const issues = validateDocument(model, { facts: artifacts.facts, evidence: artifacts.evidence, graph: artifacts.graph, rendered });
-    await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);
-    await atomicWrite(join(artifacts.root, "review.json"), `${JSON.stringify({ schema_version: 3, run_id: runId, issues, unresolved_questions: [], status: issues.some((item) => item.severity === "error" || item.severity === "security") ? "review_required" : "review" }, null, 2)}\n`);
-    return { status: "review", run_id: runId, candidate_vault: candidate, issues: issues.length, model_status: model.status, repository_count: artifacts.snapshots.length };
+    return await prepareRunDocumentation(packageRoot, config, runId);
 }
-async function approveRun(configPath, validator, runId, nonInteractive) { if (nonInteractive || !stdin.isTTY)
-    throw Object.assign(new Error("Aprobar requiere acción humana interactiva."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator), root = validatedRunRoot(config.state_root, runId); const review = await readJson(join(root, "review.json")); if (review.issues.some((item) => item.severity === "security" || item.severity === "error"))
-    throw Object.assign(new Error("La revisión contiene bloqueos no anulables."), { exitCode: 4 }); const rl = createInterface({ input: stdin, output: stdout }); try {
-    const actor = (await rl.question("Actor local que revisó el candidato: ")).trim();
-    const confirmed = /^s(i)?$/iu.test((await rl.question("¿Aprobar exactamente los hashes mostrados? [s/N]: ")).trim());
-    if (!confirmed)
-        return { status: "review_required" };
-    const receipt = await createApprovalReceipt({ runId, candidateRoot: join(root, "candidate-vault"), actor, scope: [runId], humanAction: true });
-    await atomicWrite(join(root, "approval.json"), `${JSON.stringify(receipt, null, 2)}\n`);
-    return receipt;
+async function documentRun(packageRoot, configPath, validator, runId) {
+    const config = await loadConfiguration(configPath, validator);
+    return await prepareAndPublishDocumentation(packageRoot, config, runId);
 }
-finally {
-    rl.close();
-} }
-async function publishRun(configPath, validator, runId) { const config = await loadConfiguration(configPath, validator), root = validatedRunRoot(config.state_root, runId); const receipt = await readJson(join(root, "approval.json")); return await new LocalPublicationTarget(config.vault_root, "local-primary").publish(join(root, "candidate-vault"), receipt, {}); }
 async function queryRun(configPath, validator, categoryInput, values) { const runId = requiredString(values.run, "--run"); const config = await loadConfiguration(configPath, validator); const artifacts = await loadRunArtifacts(config, runId); const repo = optionalString(values.repo); const category = parseQueryCategory(categoryInput); const result = queryRunArtifacts(artifacts, category, { ...(repo ? { repositoryId: repo, componentId: repo } : {}), limit: numberOption(values.limit, 100), offset: numberOption(values.offset, 0) }); return { ...result, table: renderRunQueryTable(category, result), run_id: runId, repository_id: repo ?? null, ai_invocations: 0 }; }
 async function shareEdition(configPath, validator, values) {
     const config = await loadConfiguration(configPath, validator), edition = requiredString(values.edicion, "--edicion"), destination = requiredString(values.destino, "--destino");
@@ -301,7 +264,7 @@ async function readJson(path) { return JSON.parse(await readFile(path, "utf8"));
 function requiredString(value, name) { if (typeof value !== "string" || value.trim() === "")
     throw Object.assign(new Error(`Falta ${name}.`), { exitCode: 2 }); return value.trim(); }
 function optionalString(value) { return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined; }
-function parseQueryCategory(value) { const allowed = ["endpoints", "dependencies", "messages", "data", "coverage", "evidence"]; if (!allowed.includes(value))
+function parseQueryCategory(value) { const allowed = ["endpoints", "dependencies", "messages", "data", "architecture", "technologies", "coverage", "evidence"]; if (!allowed.includes(value))
     throw new Error(`Categoría de consulta inválida: ${value}`); return value; }
 function numberOption(value, fallback) { if (typeof value !== "string")
     return fallback; const parsed = Number(value); if (!Number.isSafeInteger(parsed) || parsed < 0)

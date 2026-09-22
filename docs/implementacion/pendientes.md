@@ -2,33 +2,34 @@
 
 ## Ya ejecutado
 
-- Suite automatizada disponible: 38/38 superadas.
-- Tipos y compilación del motor.
+- Tipos, compilación y suite automatizada: 42/42 pruebas superadas.
 - Configuración separada de motor, workspace, estado privado y bóveda.
-- Protocolo MCP `stdio`, listado de siete herramientas y consultas de estado.
-- Run real de tres repositorios en `main`, sin checkout ni ejecución de aplicaciones.
-- Consultas de endpoints, relaciones, flujo y propuesta `review_required`.
-- Sesión real de GitHub Copilot confirmada por el usuario: estado, análisis explícito y consultas sobre un run existente, sin publicación ni modificación de aplicaciones.
-- Propuestas de migración corregidas y reprobadas: campos de pruebas/decisiones no vacíos e identificadores únicos por solicitud.
-- Generación ASD-TSE-100 corregida para documentos independientes por servicio, contratos HTTP observados, montajes Express, llamadas salientes y detalle trazable de todos los hechos.
-- Publicación real en Obsidian completada y verificada por hashes: edición visible `2026-09-22T01-44-51-467Z-f2be5250e8`, 29 archivos de contenido, tres servicios y mapa de relaciones con etiquetas legibles.
+- Run real de los tres repositorios en `main`, sin checkout ni ejecución de aplicaciones.
+- Extracción de módulos, clases, funciones, métodos, firmas, llamadas observadas, capas, imports, tecnologías, paquetes, scripts, rutas Express, handlers, datos y llamadas salientes.
+- Generación y publicación automática de fichas por servicio, Mermaid de servicio, Mermaid por entrada/salida HTTP y mapas de relaciones.
+- Edición vigente `2026-09-22T17-15-52-515Z-be7c633cf0`, copiada a `Actual` y verificada por hashes con `status: complete` (29 archivos).
+- El publicador genera el filtro del grafo para ocultar históricos, borradores y staging.
+- MCP comprobado con ocho herramientas; `docsys_prepare_documentation` reutilizó el run y la edición final sin reanalizar.
 
 ## Aceptaciones aún pendientes
 
-- P01–P112 y N01–N16 permanecen como `pending` en `tests/acceptance-catalog.ts` hasta ejecutar la campaña completa criterio por criterio. La prueba de que el catálogo contiene 128 IDs no equivale a aprobarlos.
-- Demo sintética y revisión visual manual desde la aplicación Obsidian; el recorrido real de revisión, aprobación, publicación y verificación ya se completó.
-- Completar y registrar por separado GitHub Copilot CLI, VS Code e IntelliJ; ya se comprobó una sesión real, pero falta identificar formalmente su superficie/versión y cubrir las otras variantes.
-- Cualquier llamada real a Copilot y sus casos de presupuesto/cancelación.
-- Matriz Windows/Linux/macOS completa y lanzadores desde instalaciones externas.
-- Pruebas adversariales, rendimiento, caché, interrupción, rollback y recuperación.
-- Azure Pipelines/Azure Repo y tareas programadas, solo si se activan expresamente.
-- Release final mediante `scripts/release.mjs` cuando exista evidencia de aceptación aprobada.
+- P01–P112 y N01–N16 permanecen como `pending`; 42 pruebas automatizadas no equivalen a completar 128 criterios de aceptación.
+- Revisión visual humana del contenido actual en Obsidian.
+- Aplicar en la vista gráfica `-path:Publicaciones -path:Borradores -path:.staging`, o cerrar Obsidian antes de la siguiente publicación; la aplicación abierta sobrescribió el filtro generado.
+- Prueba real de los seis especialistas interpretativos mediante Copilot CLI, incluyendo presupuesto, caché, cancelación y reanudación.
+- Pruebas separadas de GitHub Copilot en VS Code, CLI e IntelliJ.
+- Ejecución de un adaptador externo Archify; el fallback Mermaid no cuenta como tal.
+- Matriz Windows/Linux/macOS, pruebas adversariales, rendimiento, recuperación y rollback.
+- Azure y tareas programadas, únicamente si se activan expresamente.
+- Release final mediante `scripts/release.mjs` cuando exista evidencia suficiente de aceptación.
 
-## Pendientes funcionales observados
+## Limitaciones funcionales observadas
 
-- Los tres bundles reales tienen calidad `partial`; ampliar parsers solo a partir de capacidades comprobadas en esos repositorios.
-- La relación `estraviado → login-estraviado` es `candidate` porque la ruta coincide, pero la vinculación semántica del montaje Express requiere revisión humana o un alias aprobado.
-- Abrir manualmente `C:\Users\Usuario\Documents\prueba-obsidian` en Obsidian y revisar visualmente la navegación; la apertura automática no encontró una asociación ejecutable.
+- Los tres bundles tienen calidad `partial`; archivos no soportados, excluidos o dinámicos pueden contener comportamiento no extraído.
+- Los caminos internos publicados representan imports estáticos alcanzables desde el módulo de ruta. No son telemetría ni prueban el orden real de ejecución.
+- La relación `estraviado → login-estraviado` sigue como `candidate`; método y ruta coinciden, pero el montaje no pudo confirmarse estáticamente.
+- Varias llamadas a Valhalla, Mapbox, keepalive y variables de backend siguen `unresolved` cuando no existe una identidad única o un alias explícito configurado.
+- Sin Copilot CLI y modelo configurado no hay prosa interpretativa de especialistas; la edición vigente contiene hechos y derivados deterministas.
 
 ## Faltante documental
 

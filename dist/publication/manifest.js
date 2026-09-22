@@ -2,13 +2,13 @@ import { readdir, readFile, lstat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { sha256, compareBytes } from "../platform/hash.js";
 import { assertPortableRelativePath } from "../platform/paths.js";
-export const PUBLICATION_ALLOWLIST = /^(?:Inicio\.md|BORRADOR - NO APROBADO\.md|Servicios\/.*\.(?:md|json)|Mapas\/.*\.md|Decisiones\/.*\.md|Especificaciones\/.*\.md|edicion\.json)$/iu;
+export const PUBLICATION_ALLOWLIST = /^(?:Inicio\.md|Servicios\/.*\.(?:md|json)|Mapas\/.*\.md|Flujos\/.*\.md|Decisiones\/.*\.md|Especificaciones\/.*\.md|edicion\.json)$/iu;
 export async function createPublicationManifest(input) {
     const paths = await listFiles(input.root);
     const files = [];
     for (const path of paths.sort(compareBytes)) {
         const portable = assertPortableRelativePath(relative(input.root, path).replaceAll("\\", "/"));
-        if (!PUBLICATION_ALLOWLIST.test(portable) || portable === "BORRADOR - NO APROBADO.md")
+        if (!PUBLICATION_ALLOWLIST.test(portable))
             continue;
         const bytes = await readFile(path);
         files.push({ path: portable, sha256: sha256(bytes), size: bytes.byteLength });

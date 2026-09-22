@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "sistema-documentacion": {
+      "type": "local",
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "C:\\Herramientas\\documentation-extractor\\scripts\\mcp.mjs",
+        "--config",
+        "C:\\Workspaces\\prueba-extractor\\knowledge.yaml"
+      ],
+      "env": {},
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}
+

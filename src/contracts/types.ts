@@ -295,7 +295,7 @@ export interface DocumentModel {
   title: string;
   repositories: string[];
   snapshots: Snapshot[];
-  status: "review" | "review_required" | "approved";
+  status: "final";
   format: "ASD-TSE-100";
   language: "es-CO";
   archify: { status: "executed" | "unavailable"; mode: "archify" | "fallback"; version: string | null };

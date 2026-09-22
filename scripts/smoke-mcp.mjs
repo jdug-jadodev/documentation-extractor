@@ -52,7 +52,7 @@ async function main() {
     const status = await request("tools/call", { name: "docsys_status", arguments: {} });
     const repositories = await request("tools/call", { name: "docsys_list_repositories", arguments: {} });
     const names = listed.tools.map((tool) => tool.name).sort();
-    const required = ["docsys_explain_relation", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_proposal", "docsys_query", "docsys_status", "docsys_trace_flow"].sort();
+    const required = ["docsys_explain_relation", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_status", "docsys_trace_flow"].sort();
     if (JSON.stringify(names) !== JSON.stringify(required)) throw new Error(`Superficie MCP inesperada: ${names.join(", ")}`);
     if (status.isError || repositories.isError) throw new Error("Las consultas MCP de solo lectura devolvieron error.");
     const statusValue = status.structuredContent;
@@ -72,11 +72,18 @@ async function main() {
       analysisSummary = { analysis_executed: true, run_id: runId, extracted_repositories: analysis.structuredContent.repositories, relations: analysis.structuredContent.relations, ai_invocations: analysis.structuredContent.ai_invocations, published: analysis.structuredContent.published, endpoints: endpoints.structuredContent.total, relation_status: relation.structuredContent.status, flow_status: flow.structuredContent.status, flow_paths: flow.structuredContent.paths?.length ?? 0 };
     }
     if (typeof suppliedRunId === "string") {
+      if (process.argv.includes("--document")) {
+        const documentation = await request("tools/call", { name: "docsys_prepare_documentation", arguments: { run_id: suppliedRunId } }, 120_000);
+        if (documentation.isError) throw new Error(`La documentación MCP falló: ${documentation.content?.[0]?.text ?? "error no detallado"}`);
+        if (typeof documentation.structuredContent?.obsidian_path !== "string" || documentation.structuredContent?.published !== true) throw new Error("La documentación MCP no produjo una edición final publicada en Obsidian.");
+        analysisSummary = { analysis_executed: false, reused_run_id: suppliedRunId, documentation_status: documentation.structuredContent?.status, obsidian_path: documentation.structuredContent?.obsidian_path, documentation_published: documentation.structuredContent?.published, reused_edition: documentation.structuredContent?.reused_edition };
+      } else {
       const proposal = await request("tools/call", { name: "docsys_prepare_proposal", arguments: { run_id: suppliedRunId, type: "migration", request: "Separar una capacidad en un microservicio sin modificar las aplicaciones ni inventar infraestructura." } });
       if (proposal.isError) throw new Error(`La propuesta MCP falló: ${proposal.content?.[0]?.text ?? "error no detallado"}`);
       const proposalValue = proposal.structuredContent?.proposal;
       if (!Array.isArray(proposalValue?.tests) || proposalValue.tests.length === 0 || !Array.isArray(proposalValue?.pending_decisions) || proposalValue.pending_decisions.length === 0) throw new Error("La propuesta MCP dejó vacías las pruebas o decisiones pendientes.");
       analysisSummary = { analysis_executed: false, reused_run_id: suppliedRunId, proposal_id: proposal.structuredContent?.proposal_id, proposal_status: proposal.structuredContent?.status, acceptance_criteria: proposalValue.acceptance_criteria?.length ?? 0, tests: proposalValue.tests.length, pending_decisions: proposalValue.pending_decisions.length };
+      }
     }
     process.stdout.write(`${JSON.stringify({ protocol: initialized.protocolVersion, server: initialized.serverInfo, tools: names, configuration: statusValue.configuration, repositories: repositoryValue.repositories.map((repo) => repo.id), automatic_analysis: statusValue.automatic_analysis, ...analysisSummary }, null, 2)}\n`);
   } finally {

@@ -18,7 +18,7 @@ Esta revisión migra el contrato de transporte a `schema_version: 3`. El cuerpo 
 - `TaskPacket` validado con hechos, evidencias, cobertura, desconocidos y subgrafo pertinente.
 - Secciones reales de `templates/asd-tse-100-es.md`.
 - Contrato canónico `agents/documentation.md`.
-- Estado del adaptador Archify y convenciones humanas aprobadas.
+- Estado del adaptador Archify y convenciones configuradas.
 
 No recibir repositorios completos, logs brutos, rutas adicionales o conversaciones completas.
 
@@ -29,13 +29,14 @@ No recibir repositorios completos, logs brutos, rutas adicionales o conversacion
 3. Si no existe, usar modo `fallback` y registrar `archify.status: unavailable`; no simular ejecución.
 4. Producir `sections[]` para todas las secciones ASD-TSE-100.
 5. Mantener `Desconocido`, `No soportado`, `No examinado` o `Pendiente de revisión` según corresponda.
-6. Generar prosa y Mermaid solo desde hechos, hallazgos y aristas referenciados.
-7. Separar hechos, inferencias, desconocidos, riesgos y decisiones propuestas.
-8. Dejar el resultado en `review` o `review_required`; nunca aprobar o publicar.
+6. Generar el diagrama de arquitectura general solo desde hechos, hallazgos y aristas referenciados. Este es el alcance Archify de la salida.
+7. Los diagramas de cada servicio y cada endpoint se generan como Mermaid determinista por el motor; no atribuirlos a una ejecución externa de Archify.
+8. Separar hechos, inferencias, desconocidos, riesgos y decisiones propuestas.
+9. Permitir que el motor publique automáticamente la documentación factual después de la validación mecánica. La skill no aprueba decisiones ni propuestas.
 
 ## Salida
 
-Un `AgentResult` v3 del rol `documentation` cuyo `payload.sections[]` contiene `section_id`, `paragraphs[]`, `fact_ids`, `finding_ids` y `unknowns`. El motor ensambla `document.md`, fichas, tablas, enlaces e índices desde un único `DocumentModel`.
+Un `AgentResult` v3 del rol `documentation` cuyo `payload.sections[]` contiene `section_id`, `paragraphs[]`, `fact_ids`, `finding_ids` y `unknowns`. El motor ensambla el documento ASD-TSE-100, el mapa arquitectónico, diagramas por servicio y un Markdown Mermaid por endpoint desde un único `DocumentModel` y los hechos canónicos.
 
 `archify.status: executed` solo es válido con evidencia del adaptador externo. `skill_applied` significa que estas instrucciones se incorporaron al paquete, no que Archify se ejecutó.
 
@@ -44,6 +45,6 @@ Un `AgentResult` v3 del rol `documentation` cuyo `payload.sections[]` contiene `
 - No cambiar hechos ni nombres de campos sin nueva versión de contrato.
 - No acceder a terminal, fuentes, red, MCP, rutas o agentes.
 - No usar rutas absolutas ni incluir secretos.
-- No convertir una salida en conocimiento aprobado.
-- Una contradicción conserva `review_required`.
+- No convertir una inferencia o decisión propuesta en un hecho. La documentación factual puede publicarse automáticamente sin ocultar limitaciones.
+- Una contradicción se conserva como limitación explícita; solo un error mecánico o de seguridad bloquea la publicación.
 - Propuestas de desarrollo, migración o ADR pertenecen al Proponente.

@@ -1,10 +1,66 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { compareFacts } from "./compare.js";
 import { createProposal } from "./proposal/model.js";
 import { atomicWrite } from "./platform/fs.js";
 import { stableId } from "./platform/hash.js";
 import { queryFacts, renderFactTable } from "./query.js";
+import { createDocumentModel } from "./documentation/model.js";
+import { renderDocument } from "./documentation/render.js";
+import { buildCandidateVault } from "./obsidian/vault.js";
+import { validateDocument } from "./review/validators.js";
+import { loadArchifySkill } from "./documentation/skill.js";
+import { createAutomaticPublicationReceipt } from "./review/approval.js";
+import { LocalPublicationTarget } from "./publication/local.js";
+import { createPublicationManifest } from "./publication/manifest.js";
+export async function prepareRunDocumentation(packageRoot, config, runId) {
+    const artifacts = await loadRunArtifacts(config, runId);
+    const skill = await loadArchifySkill(packageRoot);
+    const model = createDocumentModel({ runId, title: `Arquitectura y documentación ${runId}`, snapshots: artifacts.snapshots, facts: artifacts.facts, graph: artifacts.graph, archifyAvailable: skill.mode === "archify", archifyVersion: skill.version });
+    const serviceModels = new Map(artifacts.snapshots.map((snapshot) => {
+        const repositoryId = snapshot.repository_id;
+        const facts = artifacts.facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
+        const componentId = `component:${repositoryId}`;
+        const edges = artifacts.graph.edges.filter((edge) => edge.from === componentId || edge.to === componentId);
+        const nodeIds = new Set([componentId, ...edges.flatMap((edge) => [edge.from, edge.to])]);
+        const graph = { ...artifacts.graph, snapshot_ids: [snapshot.id], nodes: artifacts.graph.nodes.filter((node) => nodeIds.has(node.id)), edges };
+        return [repositoryId, createDocumentModel({ runId, title: `Servicio ${repositoryId}`, snapshots: [snapshot], facts, graph, archifyAvailable: skill.mode === "archify", archifyVersion: skill.version })];
+    }));
+    const candidate = join(artifacts.root, "candidate-vault");
+    await rm(candidate, { recursive: true, force: true });
+    await buildCandidateVault(candidate, model, artifacts.graph, serviceModels, artifacts.facts);
+    const rendered = renderDocument(model);
+    const issues = validateDocument(model, { facts: artifacts.facts, evidence: artifacts.evidence, graph: artifacts.graph, rendered });
+    await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);
+    await atomicWrite(join(artifacts.root, "review.json"), `${JSON.stringify({ schema_version: 3, run_id: runId, issues, unresolved_questions: [], status: issues.some((item) => item.severity === "error" || item.severity === "security") ? "review_required" : "review", archify: { skill_status: skill.status, mode: skill.mode, sha256: skill.sha256, implementation: skill.implementation } }, null, 2)}\n`);
+    return { status: "review", run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
+}
+export async function prepareAndPublishDocumentation(packageRoot, config, runId) {
+    const prepared = await prepareRunDocumentation(packageRoot, config, runId);
+    if (prepared.blocking_issues > 0)
+        throw new Error(`La validación mecánica bloqueó la publicación: ${prepared.blocking_issues} incidencia(s) de error o seguridad.`);
+    const current = await equivalentCurrentEdition(config.vault_root, runId, prepared.candidate_vault);
+    if (current !== null)
+        return { ...prepared, status: "published", published: true, reused_edition: true, edition: current, obsidian_path: join(config.vault_root, "Actual", "Inicio.md") };
+    const authorization = await createAutomaticPublicationReceipt({ runId, candidateRoot: prepared.candidate_vault, scope: [runId] });
+    await atomicWrite(join(validatedRunRoot(config.state_root, runId), "publication-authorization.json"), `${JSON.stringify(authorization, null, 2)}\n`);
+    const edition = await new LocalPublicationTarget(config.vault_root, "automatic-primary").publish(prepared.candidate_vault, authorization, {});
+    return { ...prepared, status: "published", published: true, reused_edition: false, edition, obsidian_path: join(config.vault_root, "Actual", "Inicio.md") };
+}
+async function equivalentCurrentEdition(vaultRoot, runId, candidateRoot) {
+    let current;
+    try {
+        current = await readJson(join(vaultRoot, "Actual", "edicion.json"));
+    }
+    catch {
+        return null;
+    }
+    if (current.run_id !== runId)
+        return null;
+    const candidate = await createPublicationManifest({ editionId: current.edition_id, runId, root: candidateRoot, previousEditionId: current.previous_edition_id });
+    const comparable = (manifest) => manifest.files.map((file) => ({ path: file.path, sha256: file.sha256, size: file.size }));
+    return JSON.stringify(comparable(current)) === JSON.stringify(comparable(candidate)) ? current : null;
+}
 export async function loadRunArtifacts(config, runId) {
     const root = validatedRunRoot(config.state_root, runId);
     const run = await readJson(join(root, "run.json"));

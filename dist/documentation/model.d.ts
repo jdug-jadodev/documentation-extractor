@@ -21,3 +21,13 @@ export declare function createDocumentModel(input: {
     archifyAvailable: boolean;
     archifyVersion?: string | null;
 }): DocumentModel;
+export interface ResolvedEndpoint {
+    component: string;
+    method: string;
+    path: string;
+    handler: string;
+    source_path: string;
+    status: string;
+    evidence: string;
+}
+export declare function resolveEndpointFacts(allFacts: readonly Fact[]): ResolvedEndpoint[];

@@ -1,5 +1,5 @@
 const KINDS = {
-    endpoints: ["http_endpoint", "http_endpoint_fragment"], dependencies: ["package_dependency", "http_client_base", "http_client_call"], messages: ["message_producer", "message_consumer", "message_resource"], data: ["data_entity", "data_read", "data_write", "data_resource"]
+    endpoints: ["http_endpoint", "http_endpoint_fragment", "http_route_mount"], dependencies: ["package_dependency", "http_client_base", "http_client_call", "module_dependency"], messages: ["message_producer", "message_consumer", "message_resource"], data: ["data_entity", "data_read", "data_write", "data_resource"], architecture: ["source_module", "code_symbol", "module_dependency", "ui_component", "ui_route"], technologies: ["technology", "package_dependency", "build_script"]
 };
 export function queryFacts(facts, category, options = {}) {
     if (category === "coverage" || category === "evidence")

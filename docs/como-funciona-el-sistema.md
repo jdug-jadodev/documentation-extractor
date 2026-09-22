@@ -10,7 +10,7 @@ Petición explícita por menú, CLI o MCP
   -> escenario y grafo común
   -> consulta, relación, flujo, comparación o propuesta
   -> DocumentModel ASD-TSE-100
-  -> revisión y aprobación humana
+  -> validación mecánica
   -> edición inmutable en Obsidian
 ```
 
@@ -34,12 +34,12 @@ Se conservan Orquestador, Inventariador, Extractor, Integrador, Documentador, Re
 
 ## Copilot
 
-El agente de entrada solo puede usar `docsys_*`. Puede consultar estado, listar repositorios, preparar un análisis solicitado, explicar relaciones, trazar flujos, consultar hechos y preparar propuestas. No puede aprobar ni publicar. La carpeta contenedora del `.code-workspace` recibe solo la integración `.github` y `.vscode/mcp.json`; el motor y los repositorios de aplicaciones permanecen separados.
+El agente de entrada solo puede usar `docsys_*`. Puede consultar estado, listar repositorios, preparar un análisis solicitado, explicar relaciones, trazar flujos, consultar hechos, preparar propuestas y solicitar la documentación final. `docsys_prepare_documentation` valida y publica automáticamente; no hay herramientas de aprobar/publicar separadas. La carpeta contenedora del `.code-workspace` recibe solo la integración `.github` y `.vscode/mcp.json`; el motor y los repositorios de aplicaciones permanecen separados.
 
 ## Obsidian y compartición
 
-La revisión genera una bóveda candidata. Una acción humana crea un recibo ligado a hashes y el Publicador genera una edición nueva. Los modos `local`, `folder` y `export` funcionan sin Azure. Azure permanece separado, opcional y desactivado.
+El motor genera una bóveda candidata privada, aplica validaciones mecánicas y, si no existen errores o alertas de seguridad, crea una autorización automática ligada a hashes. El Publicador genera una edición inmutable y actualiza `Actual`. Los modos `local`, `folder` y `export` funcionan sin Azure. Azure permanece separado, opcional y desactivado.
 
 ## Estado de validación
 
-La compilación, 34 pruebas automatizadas y un recorrido MCP real en Windows se completaron. El recorrido extrajo tres repositorios locales por sus commits `main`, sin ejecutar aplicaciones, y probó consulta, relación, flujo y propuesta. Siguen pendientes la campaña completa P/N, Copilot real, apertura/publicación en Obsidian, Azure y la matriz Linux/macOS.
+La compilación, 42 pruebas automatizadas y un recorrido MCP real en Windows se completaron. El recorrido extrajo tres repositorios locales por sus commits `main`, sin ejecutar aplicaciones, y probó consulta, relación, flujo, documentación y publicación automática. Siguen pendientes la campaña completa P/N, especialistas instrumentados, Archify externo, Azure y la matriz Linux/macOS.

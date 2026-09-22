@@ -1,4 +1,4 @@
-import type { Evidence, Fact, GraphEdge, GraphNode, Inventory, KnowledgeGraph, Snapshot } from "./contracts/types.js";
+import type { Evidence, Fact, GraphEdge, GraphNode, Inventory, KnowledgeGraph, PublicationManifest, Snapshot } from "./contracts/types.js";
 import type { EffectiveConfiguration } from "./config.js";
 import { type FactDiff } from "./compare.js";
 import { type ProposalModel, type ProposalType } from "./proposal/model.js";
@@ -25,6 +25,38 @@ export interface FlowTrace {
     paths: FlowPath[];
     limitations: string[];
 }
+export declare function prepareRunDocumentation(packageRoot: string, config: EffectiveConfiguration, runId: string): Promise<{
+    status: "review";
+    run_id: string;
+    candidate_vault: string;
+    issues: number;
+    blocking_issues: number;
+    model_status: "final";
+    repository_count: number;
+    archify: {
+        skill_status: "available" | "missing";
+        mode: "archify" | "fallback";
+        external_implementation: string | null;
+    };
+}>;
+export declare function prepareAndPublishDocumentation(packageRoot: string, config: EffectiveConfiguration, runId: string): Promise<{
+    run_id: string;
+    candidate_vault: string;
+    issues: number;
+    blocking_issues: number;
+    model_status: "final";
+    repository_count: number;
+    archify: {
+        skill_status: "available" | "missing";
+        mode: "archify" | "fallback";
+        external_implementation: string | null;
+    };
+    status: "published";
+    published: boolean;
+    reused_edition: boolean;
+    edition: PublicationManifest;
+    obsidian_path: string;
+}>;
 export declare function loadRunArtifacts(config: EffectiveConfiguration, runId: string): Promise<RunArtifacts>;
 export declare function queryRunArtifacts(artifacts: RunArtifacts, category: QueryCategory, options?: {
     repositoryId?: string;

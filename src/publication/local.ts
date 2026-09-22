@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { ApprovalReceipt, PublicationManifest, PublicationTarget } from "../contracts/types.js";
 import { acquireFileLock, atomicWrite } from "../platform/fs.js";
@@ -13,7 +13,7 @@ export class LocalPublicationTarget implements PublicationTarget {
     await validateApprovalReceipt(receipt, candidateRoot);
     const lock = await acquireFileLock(join(this.vaultRoot, ".docsys-publisher.lock"), { publisher: this.publisherId, pid: process.pid });
     const editionId = `${new Date().toISOString().replace(/[:.]/gu, "-")}-${stableId("edition", receipt.content_digest).slice(-10)}`;
-    const publications = join(this.vaultRoot, "Publicaciones"), staging = join(this.vaultRoot, ".staging", editionId), destination = join(publications, editionId);
+    const publications = join(this.vaultRoot, "Publicaciones"), staging = join(this.vaultRoot, ".staging", editionId), destination = join(publications, editionId), currentStaging = join(this.vaultRoot, ".staging", `${editionId}-actual`), current = join(this.vaultRoot, "Actual");
     try {
       await mkdir(join(this.vaultRoot, ".staging"), { recursive: true });
       await mkdir(staging, { recursive: false });
@@ -24,12 +24,37 @@ export class LocalPublicationTarget implements PublicationTarget {
       await verifyPublicationManifest(staging, manifest);
       await mkdir(publications, { recursive: true }); await cp(staging, destination, { recursive: true, force: false, errorOnExist: true }); await verifyPublicationManifest(destination, manifest);
       await atomicWrite(join(destination, ".complete"), `${manifest.edition_id}\n`);
+      await cp(destination, currentStaging, { recursive: true, force: false, errorOnExist: true });
+      await rm(current, { recursive: true, force: true });
+      await promoteCurrent(currentStaging, current);
       await atomicWrite(join(this.vaultRoot, "Inicio.md"), renderRootIndex(manifest));
+      await configureGraphView(this.vaultRoot);
       await rm(staging, { recursive: true, force: true }); return manifest;
-    } catch (error) { await rm(staging, { recursive: true, force: true }); throw error; }
+    } catch (error) { await rm(staging, { recursive: true, force: true }); await rm(currentStaging, { recursive: true, force: true }); throw error; }
     finally { await lock.release(); }
   }
 }
 
+async function promoteCurrent(staging: string, current: string): Promise<void> {
+  try { await rename(staging, current); }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (!new Set(["EPERM", "EACCES", "EBUSY"]).has(code ?? "")) throw error;
+    await cp(staging, current, { recursive: true, force: false, errorOnExist: true });
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
 async function currentEditionId(root: string): Promise<string | null> { try { const value = await readFile(join(root, "Inicio.md"), "utf8"); return /edition_id:\s*([^\s]+)/u.exec(value)?.[1] ?? null; } catch { return null; } }
-function renderRootIndex(manifest: PublicationManifest): string { return `---\nedition_id: ${manifest.edition_id}\nrun_id: ${manifest.run_id}\n---\n\n# Documentación del equipo\n\nEdición actual: [[Publicaciones/${manifest.edition_id}/Inicio|${manifest.edition_id}]]\n\n${manifest.previous_edition_id ? `Edición anterior: [[Publicaciones/${manifest.previous_edition_id}/Inicio|${manifest.previous_edition_id}]]\n` : ""}`; }
+function renderRootIndex(manifest: PublicationManifest): string { return `---\nedition_id: ${manifest.edition_id}\nrun_id: ${manifest.run_id}\n---\n\n# Documentación del equipo\n\nAbrir la documentación vigente: [[Actual/Inicio|Documentación actual]]\n\nEdición inmutable: [[Publicaciones/${manifest.edition_id}/Inicio|${manifest.edition_id}]]\n\n${manifest.previous_edition_id ? `Edición anterior: [[Publicaciones/${manifest.previous_edition_id}/Inicio|${manifest.previous_edition_id}]]\n` : ""}`; }
+
+async function configureGraphView(vaultRoot: string): Promise<void> {
+  const path = join(vaultRoot, ".obsidian", "graph.json");
+  try {
+    const value = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    const current = typeof value.search === "string" ? value.search.trim() : "";
+    const filters = ["-path:Publicaciones", "-path:Borradores", "-path:.staging"];
+    value.search = [current, ...filters.filter((filter) => !current.includes(filter))].filter(Boolean).join(" ");
+    await atomicWrite(path, `${JSON.stringify(value, null, 2)}\n`);
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+}

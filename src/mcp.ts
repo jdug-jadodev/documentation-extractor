@@ -4,9 +4,10 @@ import * as z from "zod/v4";
 import { ContractValidator } from "./contracts/validator.js";
 import { configurationState, loadConfiguration } from "./config.js";
 import { runDeterministicScenario } from "./engine.js";
-import { explainRelations, loadRunArtifacts, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
+import { explainRelations, loadRunArtifacts, prepareAndPublishDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
 import type { QueryCategory } from "./query.js";
 import type { ProposalType } from "./proposal/model.js";
+import { stageProposalDraft } from "./publication/draft.js";
 
 export interface McpOptions { packageRoot: string; configPath: string; }
 
@@ -58,7 +59,7 @@ export async function buildDocumentationMcp(options: McpOptions): Promise<McpSer
 
   server.registerTool("docsys_query", {
     description: "Consulta hechos ya extraídos de un run sin volver a analizar los repositorios.",
-    inputSchema: z.object({ run_id: z.string().min(1), category: z.enum(["endpoints", "dependencies", "messages", "data", "coverage", "evidence"]), component: z.string().optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(1000).optional() }),
+    inputSchema: z.object({ run_id: z.string().min(1), category: z.enum(["endpoints", "dependencies", "messages", "data", "architecture", "technologies", "coverage", "evidence"]), component: z.string().optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(1000).optional() }),
   }, async ({ run_id, category, component, offset, limit }) => toolResult(async () => {
     const config = await loadConfiguration(options.configPath, validator);
     const artifacts = await loadRunArtifacts(config, run_id);
@@ -70,7 +71,17 @@ export async function buildDocumentationMcp(options: McpOptions): Promise<McpSer
     inputSchema: z.object({ run_id: z.string().min(1), type: z.enum(["specification", "migration", "adr"]), request: z.string().min(1), requirements: z.array(z.string()).optional() }),
   }, async ({ run_id, type, request, requirements }) => toolResult(async () => {
     const config = await loadConfiguration(options.configPath, validator);
-    return await prepareProposal(config, run_id, type as ProposalType, request, requirements ?? []);
+    const result = await prepareProposal(config, run_id, type as ProposalType, request, requirements ?? []);
+    const obsidian_draft = await stageProposalDraft(config.vault_root, run_id, result.proposal_id, result.markdown_path);
+    return { ...result, obsidian_draft };
+  }));
+
+  server.registerTool("docsys_prepare_documentation", {
+    description: "Genera, valida y publica automáticamente en Obsidian la documentación final de un run. Incluye arquitectura general, diagramas por servicio y Mermaid por endpoint, clases, métodos, utilitarios y relaciones entre sistemas.",
+    inputSchema: z.object({ run_id: z.string().min(1) }),
+  }, async ({ run_id }) => toolResult(async () => {
+    const config = await loadConfiguration(options.configPath, validator);
+    return await prepareAndPublishDocumentation(options.packageRoot, config, run_id);
   }));
 
   return server;

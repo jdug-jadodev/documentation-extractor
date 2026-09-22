@@ -65,7 +65,8 @@ export class PatternExtractorPlugin {
                         const end = start + Buffer.byteLength(match[0], "utf8");
                         const evidenceId = stableId("evidence", reader.snapshot.id, entry.relative_path, start, end, rule.id);
                         evidence.push({ schema_version: 3, id: evidenceId, repository_id: reader.snapshot.repository_id, snapshot_id: reader.snapshot.id, relative_path: entry.relative_path, source_hash: sha256(source), locator: { kind: "bytes", start, end }, rule_id: rule.id });
-                        const value = rule.map(match, { path: entry.relative_path, componentId: component.component_id });
+                        const mapped = rule.map(match, { path: entry.relative_path, componentId: component.component_id });
+                        const value = mapped !== null && typeof mapped === "object" && !Array.isArray(mapped) && !("source_path" in mapped) ? { ...mapped, source_path: entry.relative_path } : mapped;
                         facts.push({ schema_version: 3, id: stableId("fact", component.component_id, rule.factKind, value, evidenceId), kind: rule.factKind, component_id: component.component_id, value: normalizeFactValue(value), evidence_ids: [evidenceId], rule_id: rule.id });
                     }
                 }

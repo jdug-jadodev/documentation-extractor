@@ -15,7 +15,7 @@ export function buildGraph(facts, scenario) {
             const to = target ?? stableId("node", "external_service", normalizeAlias(raw));
             if (!nodes.has(to))
                 nodes.set(to, { id: to, type: "external_service", label: normalizeAlias(raw) || "destino-no-resuelto", environment: scenario.environment, fact_ids: [fact.id] });
-            edges.push(edge(from, to, "calls_http", target ? "supported" : "unresolved", fact, scenario, evidenceByFact, target ? [] : ["La base URL no tiene alias humano aprobado."]));
+            edges.push(edge(from, to, "calls_http", target ? "supported" : "unresolved", fact, scenario, evidenceByFact, target ? [] : ["La base URL no tiene un alias explícito configurado."]));
         }
         if (fact.kind === "http_client_call") {
             const raw = String(value.path_expression ?? "");
@@ -25,14 +25,14 @@ export function buildGraph(facts, scenario) {
             const target = aliasedTarget ?? (matches.length === 1 ? `component:${matches[0]}` : undefined);
             if (target !== undefined) {
                 const supported = aliasedTarget !== undefined;
-                edges.push(edge(from, target, "calls_http", supported ? "supported" : "candidate", fact, scenario, evidenceByFact, supported ? [] : ["La relación se correlacionó por método y ruta; el montaje del router requiere revisión humana."]));
+                edges.push(edge(from, target, "calls_http", supported ? "supported" : "candidate", fact, scenario, evidenceByFact, supported ? [] : ["La relación se correlacionó por método y ruta; el montaje del router no pudo confirmarse estáticamente."]));
             }
             else {
                 const label = normalizeAlias(alias ?? raw) || "destino-no-resuelto";
                 const to = stableId("node", "external_service", label);
                 if (!nodes.has(to))
                     nodes.set(to, { id: to, type: "external_service", label, environment: scenario.environment, fact_ids: [fact.id] });
-                const limitation = matches.length > 1 ? "La ruta coincide con más de un componente y no existe un alias aprobado." : "La llamada no tiene alias aprobado ni una ruta única coincidente.";
+                const limitation = matches.length > 1 ? "La ruta coincide con más de un componente y no existe un alias explícito configurado." : "La llamada no tiene un alias explícito configurado ni una ruta única coincidente.";
                 edges.push(edge(from, to, "calls_http", "unresolved", fact, scenario, evidenceByFact, [limitation]));
             }
         }

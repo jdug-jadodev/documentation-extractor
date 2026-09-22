@@ -1,4 +1,4 @@
-import { readFile, readdir, rm } from "node:fs/promises";
+import { cp, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { atomicWrite } from "../platform/fs.js";
 export async function restoreEditionIndex(vaultRoot, editionId, confirmed) {
@@ -6,7 +6,10 @@ export async function restoreEditionIndex(vaultRoot, editionId, confirmed) {
         throw new Error("Restaurar una edición requiere confirmación humana.");
     const editionRoot = join(vaultRoot, "Publicaciones", editionId);
     await readFile(join(editionRoot, ".complete"), "utf8");
-    await atomicWrite(join(vaultRoot, "Inicio.md"), `---\nedition_id: ${editionId}\n---\n\n# Documentación del equipo\n\nEdición visible: [[Publicaciones/${editionId}/Inicio|${editionId}]]\n`);
+    const current = join(vaultRoot, "Actual");
+    await rm(current, { recursive: true, force: true });
+    await cp(editionRoot, current, { recursive: true, force: false, errorOnExist: true });
+    await atomicWrite(join(vaultRoot, "Inicio.md"), `---\nedition_id: ${editionId}\n---\n\n# Documentación del equipo\n\nAbrir la documentación vigente: [[Actual/Inicio|Documentación actual]]\n\nEdición inmutable: [[Publicaciones/${editionId}/Inicio|${editionId}]]\n`);
 }
 export async function cleanupEditions(vaultRoot, keep, confirmed) {
     if (!confirmed)

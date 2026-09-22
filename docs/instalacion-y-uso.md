@@ -18,15 +18,15 @@ Las pruebas del motor y del servidor MCP ya fueron autorizadas. La demo, Copilot
 5. Configurar Copilot solo si se desea; la extracción determinista no lo necesita.
 6. Preparar un run individual o multirrepositorio.
 7. Consultar, relacionar, trazar, comparar o preparar una propuesta.
-8. Revisar, aprobar humanamente y publicar cuando corresponda.
+8. Ejecutar `documentar`; el motor valida y publica automáticamente la edición final.
 
 ## Copilot local
 
 - `pnpm copilot:config ide` imprime el JSON para VS Code/IntelliJ.
 - `pnpm copilot:config cli` imprime el JSON para `~/.copilot/mcp-config.json`.
 - El cliente inicia `pnpm mcp` por `stdio` bajo demanda; no queda un daemon.
-- El conector no ofrece operaciones de aprobación o publicación.
+- `docsys_prepare_documentation` genera y publica la documentación final; no existe aprobación humana intermedia.
 
 ## Estado de pruebas
 
-La suite disponible pasa 36/36. El transporte MCP, sus siete herramientas, un run real de tres repositorios y una sesión real de GitHub Copilot fueron comprobados en Windows sin IA ni publicación. Siguen pendientes la aceptación exhaustiva P01–P112/N01–N16, demo, Obsidian, las demás superficies de Copilot, Linux/macOS y, solo si se activa expresamente, Azure.
+La suite disponible pasa 42/42. El transporte MCP, sus ocho herramientas, un run real de tres repositorios, la extracción arquitectónica, los Mermaid por servicio/flujo y una publicación automática verificada en Obsidian fueron comprobados en Windows. Siguen pendientes la aceptación exhaustiva P01–P112/N01–N16, los especialistas instrumentados, Archify externo, Linux/macOS y, solo si se activa expresamente, Azure.
