@@ -116,8 +116,11 @@ test("un flujo productivo no incorpora llamadas ni símbolos procedentes de prue
     { schema_version: 3, id: "handler-prod", kind: "code_symbol", component_id: "gr", value: { symbol_id: "handler.get", name: "get", symbol_type: "method", class_name: "PermissionHandler", source_path: "src/main/java/PermissionHandler.java", source_set: "main" }, evidence_ids: [], rule_id: "source.symbol" },
     { schema_version: 3, id: "test-symbol", kind: "code_symbol", component_id: "gr", value: { symbol_id: "handler.test", name: "shouldGet", symbol_type: "method", class_name: "PermissionHandlerTest", source_path: "src/test/java/PermissionHandlerTest.java", source_set: "test" }, evidence_ids: [], rule_id: "source.symbol" },
     { schema_version: 3, id: "test-call", kind: "symbol_call", component_id: "gr", value: { caller_symbol_id: "handler.get", callee_name: "shouldGet", expression: "test.shouldGet", target_symbol_id: "handler.test", resolution: "supported", source_path: "src/test/java/PermissionHandlerTest.java", source_set: "test" }, evidence_ids: [], rule_id: "source.call" },
+    { schema_version: 3, id: "wrong-target", kind: "symbol_call", component_id: "gr", value: { caller_symbol_id: "handler.get", callee_name: "duplicateName", expression: "service.duplicateName", target_symbol_id: "test.duplicateName", target_class: "PermissionServiceTest", target_path: "src/test/java/PermissionServiceTest.java", resolution: "supported", source_path: "src/main/java/PermissionHandler.java", source_set: "main" }, evidence_ids: [], rule_id: "source.call" },
   ];
-  const result = explainEndpointFromFacts("run-test", "gr", "GET", "/permissions", facts) as { steps: Array<{ name: string }>; calls: unknown[] };
+  const result = explainEndpointFromFacts("run-test", "gr", "GET", "/permissions", facts) as { steps: Array<{ name: string }>; calls: Array<{ resolution: string; target_symbol_id: string | null }> };
   assert.deepEqual(result.steps.map((step) => step.name), ["get"]);
-  assert.equal(result.calls.length, 0);
+  assert.equal(result.calls.length, 1);
+  assert.equal(result.calls[0]?.resolution, "unresolved");
+  assert.equal(result.calls[0]?.target_symbol_id, null);
 });

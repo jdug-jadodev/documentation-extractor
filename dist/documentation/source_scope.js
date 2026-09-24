@@ -20,11 +20,13 @@ export function isTestFact(fact) {
         if (typeof candidate === "string" && isTestSourcePath(candidate))
             return true;
     }
+    if (fact.kind !== "symbol_call" && typeof value.target_path === "string" && isTestSourcePath(value.target_path))
+        return true;
     return false;
 }
 /** Facts eligible for user-facing production documentation. */
 export function productionFacts(facts) {
-    return facts.filter((fact) => !isTestFact(fact));
+    return facts.filter((fact) => !isTestFact(fact)).map(withoutTestTarget);
 }
 /** Removes graph relations that are supported only by excluded test facts. */
 export function graphForFacts(graph, facts) {
@@ -37,5 +39,14 @@ export function graphForFacts(graph, facts) {
 }
 function asRecord(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function withoutTestTarget(fact) {
+    if (fact.kind !== "symbol_call")
+        return fact;
+    const value = asRecord(fact.value);
+    if (typeof value.target_path !== "string" || !isTestSourcePath(value.target_path))
+        return fact;
+    const sanitized = { ...value, target_symbol_id: null, target_class: null, target_path: null, resolution: "unresolved" };
+    return { ...fact, value: sanitized };
 }
 //# sourceMappingURL=source_scope.js.map

@@ -1,6 +1,6 @@
 # Plan de inteligencia documental, análisis de desarrollos y migraciones
 
-Estado: **propuesto**  
+Estado: **en ejecución — fase 1 completada**  
 Proyecto: `documentation-extractor`  
 Objetivo: conservar la documentación técnica enriquecida actual y añadir una capa nueva que permita a Copilot analizar flujos, responsabilidades, desarrollos y migraciones sin recorrer repositorios completos.
 
@@ -736,19 +736,29 @@ Las mejoras específicas de WebFlux se implementarán en el extractor Java, pero
 
 ### Fase 0 — Baseline y no regresión
 
-- [ ] Capturar snapshots de la documentación productiva actual.
-- [ ] Definir invariantes de publicación.
-- [ ] Medir archivos, bytes, tiempo, memoria y relaciones.
-- [ ] Crear un caso vertical de referencia: permisos administrativos.
+- [x] Capturar el baseline de la documentación actual antes de filtrar pruebas.
+- [x] Definir invariantes de publicación mediante pruebas automatizadas.
+- [ ] Completar la medición de tiempo, memoria y relaciones; archivos y bytes ya tienen baseline.
+- [x] Validar el caso vertical de referencia: permisos administrativos.
 
 ### Fase 1 — Exclusión de tests
 
-- [ ] Implementar clasificador común.
-- [ ] Filtrar modelos documentales.
-- [ ] Filtrar árboles, diagramas, flujos y navegación.
-- [ ] Regenerar un run real.
-- [ ] Confirmar que no aparecen fuentes de pruebas.
-- [ ] Comparar documentación productiva antes y después.
+- [x] Implementar clasificador común.
+- [x] Filtrar modelos documentales.
+- [x] Filtrar árboles, diagramas, flujos y navegación.
+- [x] Regenerar un run real.
+- [x] Confirmar que no aparecen fuentes de pruebas.
+- [x] Comparar documentación productiva antes y después.
+
+Resultado del run real `run-2026-09-23T22-32-27-435Z-gr`:
+
+- antes: 9.213 archivos y 39.227.006 bytes;
+- después: 4.241 archivos y 16.993.146 bytes;
+- reducción: 4.972 archivos y aproximadamente 56,7 % de bytes;
+- referencias documentales a rutas de tests: de 5.021 páginas candidatas a 0;
+- el flujo productivo `GET /permisos-admin` permanece publicado;
+- los artefactos crudos conservan los hechos de pruebas para auditoría, pero no entran al modelo, los diagramas, los flujos ni el contexto MCP;
+- una llamada productiva enlazada erróneamente con un símbolo homónimo de test se conserva como llamada no resuelta, sin exponer el destino de prueba.
 
 ### Fase 2 — Índice documental
 
@@ -913,4 +923,3 @@ El plan estará completo cuando:
 8. ninguna ausencia de información provoque un recorrido automático del repositorio;
 9. las propuestas incluyan responsabilidad, impacto, criticidad, evidencia y confianza;
 10. Node, JavaScript y los extractores existentes continúen funcionando.
-

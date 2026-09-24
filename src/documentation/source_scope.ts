@@ -18,12 +18,13 @@ export function isTestFact(fact: Fact): boolean {
   for (const candidate of [value.source_path, value.path, value.manifest]) {
     if (typeof candidate === "string" && isTestSourcePath(candidate)) return true;
   }
+  if (fact.kind !== "symbol_call" && typeof value.target_path === "string" && isTestSourcePath(value.target_path)) return true;
   return false;
 }
 
 /** Facts eligible for user-facing production documentation. */
 export function productionFacts(facts: readonly Fact[]): Fact[] {
-  return facts.filter((fact) => !isTestFact(fact));
+  return facts.filter((fact) => !isTestFact(fact)).map(withoutTestTarget);
 }
 
 /** Removes graph relations that are supported only by excluded test facts. */
@@ -38,4 +39,12 @@ export function graphForFacts(graph: KnowledgeGraph, facts: readonly Fact[]): Kn
 
 function asRecord(value: Fact["value"]): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function withoutTestTarget(fact: Fact): Fact {
+  if (fact.kind !== "symbol_call") return fact;
+  const value = asRecord(fact.value);
+  if (typeof value.target_path !== "string" || !isTestSourcePath(value.target_path)) return fact;
+  const sanitized = { ...value, target_symbol_id: null, target_class: null, target_path: null, resolution: "unresolved" };
+  return { ...fact, value: sanitized };
 }
