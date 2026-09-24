@@ -4,18 +4,18 @@ workspace_file: "C:\\Users\\Usuario\\Documents\\prueba-extractor\\.code-workspac
 vault_path: "C:\\Users\\Usuario\\Documents\\prueba-extractor\\boveda"
 state_path: "C:\\Users\\Usuario\\Documents\\documentation-extractor\\.knowledge\\workspaces\\prueba-extractor"
 repositories:
-  - id: "backend-elevacion"
-    path: "C:\\Users\\Usuario\\Documents\\back-elevation"
+  # - id: "brouter-colombia"
+  #   path: "C:\\Users\\Usuario\\Documents\\brouter-colombia"
+  #   enabled: false
+  #   default_branch: "main"
+  # - id: "template"
+  #   path: "D:\\documents\\programacion\\java-hex\\template\\template"
+  #   enabled: false
+  #   default_branch: "main"
+  - id: "gr"
+    path: "C:\\Users\\Usuario\\Documents\\963-grmovilidad-csmovilidad-ms"
     enabled: true
-    default_branch: "main"
-  - id: "estraviado"
-    path: "D:\\documents\\estraviado"
-    enabled: true
-    default_branch: "main"
-  - id: "login-estraviado"
-    path: "D:\\documents\\mcp-server\\Loggin-Mcp"
-    enabled: true
-    default_branch: "main"
+    default_branch: "master"
 ai:
   provider: copilot-cli
   model: null
@@ -27,12 +27,12 @@ azure:
   enabled: false
 overrides:
   repository_metadata:
-    estraviado:
-      type: mobile_application
-      label: "Estraviado"
-    backend-elevacion:
+    brouter-colombia:
       type: microservice
-      label: "Backend de elevación"
-    login-estraviado:
+      label: "Brouter Colombia"
+    template:
       type: microservice
-      label: "Login Estraviado"
+      label: "Template"
+    gr:
+      type: microservice
+      label: "GR Movilidad"

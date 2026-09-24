@@ -1,0 +1,23 @@
+{
+  "folders": [
+    {
+      "name": "documentacion-workspace",
+      "path": "."
+    },
+    {
+      "name": "brouter-colombia",
+      "path": "C:\\Users\\Usuario\\Documents\\brouter-colombia"
+    },
+    {
+      "name": "template",
+      "path": "D:\\documents\\programacion\\java-hex\\template\\template"
+    },
+    {
+      "name": "gr",
+      "path": "C:\\Users\\Usuario\\Documents\\963-grmovilidad-csmovilidad-ms"
+    }
+  ],
+  "settings": {
+    "chat.mcp.autostart": "newAndOutdated"
+  }
+}

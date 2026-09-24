@@ -6,7 +6,10 @@ import { renderDocument } from "../documentation/render.js";
 import { renderEditionIndex, renderGraphTable, serviceDocumentPath } from "./navigation.js";
 import { resolveEndpointFacts } from "../documentation/model.js";
 import { semanticFlows, traceEndpointFlow } from "../documentation/semantic.js";
+import { graphForFacts, productionFacts } from "../documentation/source_scope.js";
 export async function buildCandidateVault(root, model, graph, serviceModels = new Map(), facts = [], profileOverrides = {}) {
+    facts = productionFacts(facts);
+    graph = graphForFacts(graph, facts);
     await mkdir(root, { recursive: true });
     const allFlows = [];
     await atomicWrite(join(root, "Inicio.md"), renderEditionIndex(model));
@@ -41,7 +44,7 @@ export async function buildCandidateVault(root, model, graph, serviceModels = ne
 }
 /** Renders exactly one already-indexed HTTP flow; it never reads an application repository. */
 export function renderScopedFlowDocumentation(repositoryId, method, path, facts) {
-    const serviceFacts = facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
+    const serviceFacts = productionFacts(facts).filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
     const endpoint = resolveEndpointFacts(serviceFacts).find((item) => item.component === repositoryId && item.method.toUpperCase() === method.toUpperCase() && normalizeRoute(item.path) === normalizeRoute(path));
     if (endpoint === undefined)
         throw new Error(`No existe un flujo indexado para ${repositoryId} ${method.toUpperCase()} ${path}.`);
@@ -211,13 +214,13 @@ function renderRepositoryStructure(repositoryId, facts) {
     const files = facts.filter((fact) => fact.kind === "repository_file").map((fact) => String(asRecord(fact.value).path ?? "")).filter(Boolean).sort((a, b) => a.localeCompare(b));
     const sourceFiles = facts.filter((fact) => fact.kind === "source_module").map((fact) => asRecord(fact.value));
     const sourceSets = countValues(sourceFiles.map((value) => String(value.source_set ?? "root"))), buildModules = countValues(sourceFiles.map((value) => String(value.build_module ?? ".")));
-    return [`# Estructura de ${repositoryId}`, "", "> Vista física separada de la arquitectura semántica. Incluye código, pruebas, recursos, manifiestos, configuración y documentación que entraron al análisis.", "", `Archivos documentables: **${files.length}**.`, "", "## Árbol", "", "```text", repositoryId, ...(files.length > 0 ? treeLines(files) : ["└── (sin archivos documentables)"]), "```", "", "## Source sets", "", "| Source set | Archivos fuente |", "|---|---:|", ...[...sourceSets.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "## Módulos de build", "", "| Módulo | Archivos fuente |", "|---|---:|", ...[...buildModules.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
+    return [`# Estructura de ${repositoryId}`, "", "> Vista física separada de la arquitectura semántica. Incluye código productivo, recursos, manifiestos, configuración y documentación que entraron al análisis. Los archivos de prueba no se publican.", "", `Archivos documentables: **${files.length}**.`, "", "## Árbol", "", "```text", repositoryId, ...(files.length > 0 ? treeLines(files) : ["└── (sin archivos documentables)"]), "```", "", "## Source sets", "", "| Source set | Archivos fuente |", "|---|---:|", ...[...sourceSets.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "## Módulos de build", "", "| Módulo | Archivos fuente |", "|---|---:|", ...[...buildModules.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
 }
 function renderBuildModules(repositoryId, facts) {
     const sources = facts.filter((fact) => fact.kind === "source_module").map((fact) => asRecord(fact.value));
     const modules = countValues(sources.map((value) => String(value.build_module ?? ".")));
     const dependencies = facts.filter((fact) => fact.kind === "build_module_dependency").map((fact) => asRecord(fact.value));
-    return [`# Módulos de build de ${repositoryId}`, "", "| Módulo | Fuentes | Producción | Pruebas |", "|---|---:|---:|---:|", ...[...modules.entries()].map(([name, count]) => `| ${cell(name)} | ${count} | ${sources.filter((value) => String(value.build_module ?? ".") === name && value.source_set !== "test").length} | ${sources.filter((value) => String(value.build_module ?? ".") === name && value.source_set === "test").length} |`), "", "## Dependencias declaradas", "", "| Origen | Destino | Manifiesto |", "|---|---|---|", ...(dependencies.length > 0 ? dependencies.map((value) => `| ${cell(String(value.source_module ?? "."))} | ${cell(String(value.target_module ?? "Desconocido"))} | ${cell(String(value.source_path ?? "Desconocido"))} |`) : ["| No detectado | No detectado | No detectado |"]), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
+    return [`# Módulos de build de ${repositoryId}`, "", "| Módulo | Fuentes de producción |", "|---|---:|", ...[...modules.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "## Dependencias declaradas", "", "| Origen | Destino | Manifiesto |", "|---|---|---|", ...(dependencies.length > 0 ? dependencies.map((value) => `| ${cell(String(value.source_module ?? "."))} | ${cell(String(value.target_module ?? "Desconocido"))} | ${cell(String(value.source_path ?? "Desconocido"))} |`) : ["| No detectado | No detectado | No detectado |"]), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
 }
 function renderLayers(repositoryId, facts) {
     const modules = facts.filter((fact) => fact.kind === "source_module").map((fact) => asRecord(fact.value)).sort((a, b) => String(a.path ?? "").localeCompare(String(b.path ?? "")));

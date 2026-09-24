@@ -1,8 +1,11 @@
 import { resolveEndpointFacts } from "./model.js";
+import { productionFacts } from "./source_scope.js";
 export function semanticFlows(component, facts) {
-    return resolveEndpointFacts(facts).filter((endpoint) => endpoint.component === component).map((endpoint) => traceEndpointFlow(endpoint, facts));
+    const documentedFacts = productionFacts(facts);
+    return resolveEndpointFacts(documentedFacts).filter((endpoint) => endpoint.component === component).map((endpoint) => traceEndpointFlow(endpoint, documentedFacts));
 }
 export function traceEndpointFlow(endpoint, facts, maxDepth = 12, maxSymbols = 80, maxCalls = 160) {
+    facts = productionFacts(facts);
     const symbols = facts.filter((fact) => fact.kind === "code_symbol").map(symbolFromFact).filter((value) => value !== null);
     const symbolById = new Map(symbols.map((symbol) => [symbol.id, symbol]));
     const calls = facts.filter((fact) => fact.kind === "symbol_call").map(callFromFact).filter((value) => value !== null);
@@ -52,6 +55,7 @@ export function traceEndpointFlow(endpoint, facts, maxDepth = 12, maxSymbols = 8
     return { endpoint, start_symbol_id: start?.id ?? null, symbols: reached, calls: reachedCalls, data, integrations, limitations };
 }
 export function explainServiceFromFacts(runId, component, facts, graph, symbolLimit = 80) {
+    facts = productionFacts(facts);
     const selected = facts.filter((fact) => fact.component_id === component || fact.component_id.startsWith(`${component}:`));
     const symbols = selected.filter((fact) => fact.kind === "code_symbol").map(symbolFromFact).filter((value) => value !== null);
     const endpoints = resolveEndpointFacts(selected);
@@ -83,6 +87,7 @@ export function explainServiceFromFacts(runId, component, facts, graph, symbolLi
     };
 }
 export function explainEndpointFromFacts(runId, component, method, path, facts) {
+    facts = productionFacts(facts);
     const selected = facts.filter((fact) => fact.component_id === component || fact.component_id.startsWith(`${component}:`));
     const endpoint = resolveEndpointFacts(selected).find((item) => item.method.toUpperCase() === method.toUpperCase() && normalizePath(item.path) === normalizePath(path));
     if (endpoint === undefined)

@@ -1,0 +1,41 @@
+import type { Fact, KnowledgeGraph } from "../contracts/types.js";
+
+/** Returns true when a path belongs to test-only source code. */
+export function isTestSourcePath(input: string): boolean {
+  const path = input.replace(/\\/gu, "/").replace(/^\.\//u, "");
+  const segments = path.toLocaleLowerCase("en-US").split("/").filter(Boolean);
+  if (segments.some((segment) => ["test", "tests", "spec", "specs", "__tests__"].includes(segment) || segment.endsWith(".tests"))) return true;
+  const file = segments.at(-1) ?? "";
+  if (/(?:^|\.)test\.[^.]+$/u.test(file) || /(?:^|\.)spec\.[^.]+$/u.test(file)) return true;
+  if (/^test_.*\.py$/u.test(file) || /_test\.py$/u.test(file)) return true;
+  return /(?:test|tests|spec|it|itcase)\.(?:java|kt|kts|groovy|cs)$/u.test(file);
+}
+
+/** Classifies a fact without discarding the raw analysis artifact that produced it. */
+export function isTestFact(fact: Fact): boolean {
+  const value = asRecord(fact.value);
+  if (String(value.source_set ?? "").toLocaleLowerCase("en-US") === "test") return true;
+  for (const candidate of [value.source_path, value.path, value.manifest]) {
+    if (typeof candidate === "string" && isTestSourcePath(candidate)) return true;
+  }
+  return false;
+}
+
+/** Facts eligible for user-facing production documentation. */
+export function productionFacts(facts: readonly Fact[]): Fact[] {
+  return facts.filter((fact) => !isTestFact(fact));
+}
+
+/** Removes graph relations that are supported only by excluded test facts. */
+export function graphForFacts(graph: KnowledgeGraph, facts: readonly Fact[]): KnowledgeGraph {
+  const factIds = new Set(facts.map((fact) => fact.id));
+  const componentIds = new Set(facts.map((fact) => `component:${fact.component_id.split(":", 1)[0]}`));
+  const edges = graph.edges.filter((edge) => edge.fact_ids.length === 0 || edge.fact_ids.some((id) => factIds.has(id)));
+  const referencedNodes = new Set(edges.flatMap((edge) => [edge.from, edge.to]));
+  const nodes = graph.nodes.filter((node) => referencedNodes.has(node.id) || componentIds.has(node.id) || node.fact_ids.some((id) => factIds.has(id)));
+  return { ...graph, nodes, edges };
+}
+
+function asRecord(value: Fact["value"]): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}

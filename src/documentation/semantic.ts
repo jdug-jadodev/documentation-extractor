@@ -1,5 +1,6 @@
 import type { Fact, KnowledgeGraph } from "../contracts/types.js";
 import { resolveEndpointFacts, type ResolvedEndpoint } from "./model.js";
+import { productionFacts } from "./source_scope.js";
 
 export interface SemanticSymbol {
   id: string;
@@ -34,10 +35,12 @@ export interface SemanticFlow {
 }
 
 export function semanticFlows(component: string, facts: readonly Fact[]): SemanticFlow[] {
-  return resolveEndpointFacts(facts).filter((endpoint) => endpoint.component === component).map((endpoint) => traceEndpointFlow(endpoint, facts));
+  const documentedFacts = productionFacts(facts);
+  return resolveEndpointFacts(documentedFacts).filter((endpoint) => endpoint.component === component).map((endpoint) => traceEndpointFlow(endpoint, documentedFacts));
 }
 
 export function traceEndpointFlow(endpoint: ResolvedEndpoint, facts: readonly Fact[], maxDepth = 12, maxSymbols = 80, maxCalls = 160): SemanticFlow {
+  facts = productionFacts(facts);
   const symbols = facts.filter((fact) => fact.kind === "code_symbol").map(symbolFromFact).filter((value): value is SemanticSymbol => value !== null);
   const symbolById = new Map(symbols.map((symbol) => [symbol.id, symbol]));
   const calls = facts.filter((fact) => fact.kind === "symbol_call").map(callFromFact).filter((value): value is SemanticCall => value !== null);
@@ -78,6 +81,7 @@ export function traceEndpointFlow(endpoint: ResolvedEndpoint, facts: readonly Fa
 }
 
 export function explainServiceFromFacts(runId: string, component: string, facts: readonly Fact[], graph: KnowledgeGraph, symbolLimit = 80) {
+  facts = productionFacts(facts);
   const selected = facts.filter((fact) => fact.component_id === component || fact.component_id.startsWith(`${component}:`));
   const symbols = selected.filter((fact) => fact.kind === "code_symbol").map(symbolFromFact).filter((value): value is SemanticSymbol => value !== null);
   const endpoints = resolveEndpointFacts(selected);
@@ -103,6 +107,7 @@ export function explainServiceFromFacts(runId: string, component: string, facts:
 }
 
 export function explainEndpointFromFacts(runId: string, component: string, method: string, path: string, facts: readonly Fact[]) {
+  facts = productionFacts(facts);
   const selected = facts.filter((fact) => fact.component_id === component || fact.component_id.startsWith(`${component}:`));
   const endpoint = resolveEndpointFacts(selected).find((item) => item.method.toUpperCase() === method.toUpperCase() && normalizePath(item.path) === normalizePath(path));
   if (endpoint === undefined) return { schema_version: 3, run_id: runId, component, method: method.toUpperCase(), path, status: "unresolved", limitations: ["No existe un endpoint extraído que coincida exactamente con método y ruta."] };

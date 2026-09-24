@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Fact, KnowledgeGraph } from "../src/contracts/types.js";
 import { explainRelations, findDocumentableFlows, queryRunArtifacts, traceFlow, type RunArtifacts } from "../src/run_services.js";
 import { explainEndpointFromFacts, explainServiceFromFacts } from "../src/documentation/semantic.js";
+import { graphForFacts, isTestSourcePath, productionFacts } from "../src/documentation/source_scope.js";
 
 const graph: KnowledgeGraph = {
   schema_version: 3,
@@ -74,4 +75,49 @@ test("la búsqueda funcional localiza un flujo sin leer el repositorio", () => {
   const matches = findDocumentableFlows("gr", "permisos de administración", facts);
   assert.equal(matches[0]?.path, "/permisos-admin");
   assert.equal(matches[0]?.method, "GET");
+});
+
+test("la documentación excluye pruebas de Java, Node, Python y .NET sin borrar los hechos originales", () => {
+  const paths = [
+    "src/test/java/com/example/PermissionHandlerTest.java",
+    "src/__tests__/permissions.test.ts",
+    "tests/test_permissions.py",
+    "Permissions.Tests/PermissionService.cs",
+    "src/spec/permissions.spec.js",
+  ];
+  for (const path of paths) assert.equal(isTestSourcePath(path), true, path);
+  assert.equal(isTestSourcePath("src/main/java/com/example/ContestService.java"), false);
+  assert.equal(isTestSourcePath("src/services/testing/PermissionService.ts"), false);
+
+  const facts: Fact[] = [
+    { schema_version: 3, id: "production", kind: "code_symbol", component_id: "gr", value: { name: "execute", source_path: "src/main/java/PermissionService.java", source_set: "main" }, evidence_ids: [], rule_id: "source.symbol" },
+    { schema_version: 3, id: "test", kind: "code_symbol", component_id: "gr", value: { name: "executeTest", source_path: "src/test/java/PermissionServiceTest.java", source_set: "test" }, evidence_ids: [], rule_id: "source.symbol" },
+  ];
+  assert.deepEqual(productionFacts(facts).map((fact) => fact.id), ["production"]);
+  assert.equal(facts.length, 2);
+
+  const filtered = graphForFacts({
+    schema_version: 3,
+    scenario_id: "scope",
+    snapshot_ids: [],
+    nodes: [
+      { id: "component:gr", type: "component", label: "gr", environment: null, fact_ids: ["production", "test"] },
+      { id: "external:test-double", type: "external_service", label: "test double", environment: null, fact_ids: ["test"] },
+    ],
+    edges: [{ id: "test-edge", from: "component:gr", to: "external:test-double", type: "calls_http", environment: null, scenario_id: "scope", status: "supported", fact_ids: ["test"], evidence_ids: [], rule_id: "test", limitations: [] }],
+  }, productionFacts(facts));
+  assert.equal(filtered.edges.length, 0);
+  assert.deepEqual(filtered.nodes.map((node) => node.id), ["component:gr"]);
+});
+
+test("un flujo productivo no incorpora llamadas ni símbolos procedentes de pruebas", () => {
+  const facts: Fact[] = [
+    { schema_version: 3, id: "endpoint-prod", kind: "http_endpoint", component_id: "gr", value: { method: "GET", path: "/permissions", handler_expression: "handler.get", source_path: "src/main/java/Router.java", source_set: "main" }, evidence_ids: [], rule_id: "webflux.functional-route" },
+    { schema_version: 3, id: "handler-prod", kind: "code_symbol", component_id: "gr", value: { symbol_id: "handler.get", name: "get", symbol_type: "method", class_name: "PermissionHandler", source_path: "src/main/java/PermissionHandler.java", source_set: "main" }, evidence_ids: [], rule_id: "source.symbol" },
+    { schema_version: 3, id: "test-symbol", kind: "code_symbol", component_id: "gr", value: { symbol_id: "handler.test", name: "shouldGet", symbol_type: "method", class_name: "PermissionHandlerTest", source_path: "src/test/java/PermissionHandlerTest.java", source_set: "test" }, evidence_ids: [], rule_id: "source.symbol" },
+    { schema_version: 3, id: "test-call", kind: "symbol_call", component_id: "gr", value: { caller_symbol_id: "handler.get", callee_name: "shouldGet", expression: "test.shouldGet", target_symbol_id: "handler.test", resolution: "supported", source_path: "src/test/java/PermissionHandlerTest.java", source_set: "test" }, evidence_ids: [], rule_id: "source.call" },
+  ];
+  const result = explainEndpointFromFacts("run-test", "gr", "GET", "/permissions", facts) as { steps: Array<{ name: string }>; calls: unknown[] };
+  assert.deepEqual(result.steps.map((step) => step.name), ["get"]);
+  assert.equal(result.calls.length, 0);
 });

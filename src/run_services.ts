@@ -8,6 +8,7 @@ import { atomicWrite } from "./platform/fs.js";
 import { stableId } from "./platform/hash.js";
 import { queryFacts, renderFactTable, type QueryCategory } from "./query.js";
 import { createDocumentModel, resolveEndpointFacts } from "./documentation/model.js";
+import { graphForFacts, productionFacts } from "./documentation/source_scope.js";
 import { renderDocument } from "./documentation/render.js";
 import { buildCandidateVault, renderScopedFlowDocumentation, type RepositoryProfileOverride, type RepositoryProfileOverrides } from "./obsidian/vault.js";
 import { validateDocument } from "./review/validators.js";
@@ -47,7 +48,7 @@ export interface DocumentableFlow { component: string; method: string; path: str
 export function findDocumentableFlows(component: string, query: string, facts: readonly Fact[], limit = 20): DocumentableFlow[] {
   const tokens = searchTokens(query);
   if (tokens.length === 0) return [];
-  return resolveEndpointFacts(facts)
+  return resolveEndpointFacts(productionFacts(facts))
     .filter((endpoint) => endpoint.component === component)
     .map((endpoint) => {
       const pathWords = searchTokens(`${endpoint.method} ${endpoint.path}`);
@@ -89,22 +90,24 @@ export async function prepareRunDocumentation(packageRoot: string, config: Effec
   const requestedArtifacts = await loadRunArtifacts(config, runId);
   const { artifacts, catalog } = await composeWorkspaceArtifacts(config, requestedArtifacts);
   const skill = await loadArchifySkill(packageRoot);
-  const model = createDocumentModel({ runId, title: `Arquitectura y documentación ${runId}`, snapshots: artifacts.snapshots, facts: artifacts.facts, graph: artifacts.graph, archifyAvailable: skill.mode === "archify", archifyVersion: skill.version });
+  const documentedFacts = productionFacts(artifacts.facts);
+  const documentedGraph = graphForFacts(artifacts.graph, documentedFacts);
+  const model = createDocumentModel({ runId, title: `Arquitectura y documentación ${runId}`, snapshots: artifacts.snapshots, facts: documentedFacts, graph: documentedGraph, archifyAvailable: skill.mode === "archify", archifyVersion: skill.version });
   const serviceModels = new Map<string, DocumentModel>(artifacts.snapshots.map((snapshot) => {
     const repositoryId = snapshot.repository_id;
-    const facts = artifacts.facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
+    const facts = documentedFacts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
     const componentId = `component:${repositoryId}`;
-    const edges = artifacts.graph.edges.filter((edge) => edge.from === componentId || edge.to === componentId);
+    const edges = documentedGraph.edges.filter((edge) => edge.from === componentId || edge.to === componentId);
     const nodeIds = new Set([componentId, ...edges.flatMap((edge) => [edge.from, edge.to])]);
-    const graph: KnowledgeGraph = { ...artifacts.graph, snapshot_ids: [snapshot.id], nodes: artifacts.graph.nodes.filter((node) => nodeIds.has(node.id)), edges };
+    const graph: KnowledgeGraph = { ...documentedGraph, snapshot_ids: [snapshot.id], nodes: documentedGraph.nodes.filter((node) => nodeIds.has(node.id)), edges };
     return [repositoryId, createDocumentModel({ runId, title: `Servicio ${repositoryId}`, snapshots: [snapshot], facts, graph, archifyAvailable: skill.mode === "archify", archifyVersion: skill.version })];
   }));
   const candidate = join(artifacts.root, "candidate-vault");
   await rm(candidate, { recursive: true, force: true });
-  await buildCandidateVault(candidate, model, artifacts.graph, serviceModels, artifacts.facts, repositoryProfileOverrides(config.overrides));
+  await buildCandidateVault(candidate, model, documentedGraph, serviceModels, documentedFacts, repositoryProfileOverrides(config.overrides));
   await atomicWrite(join(candidate, "fuentes-conocimiento.json"), `${JSON.stringify(catalog, null, 2)}\n`);
   const rendered = renderDocument(model);
-  const issues = validateDocument(model, { facts: artifacts.facts, evidence: artifacts.evidence, graph: artifacts.graph, rendered });
+  const issues = validateDocument(model, { facts: documentedFacts, evidence: artifacts.evidence, graph: documentedGraph, rendered });
   await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);
   await atomicWrite(join(artifacts.root, "review.json"), `${JSON.stringify({ schema_version: 3, run_id: runId, issues, unresolved_questions: [], status: issues.some((item) => item.severity === "error" || item.severity === "security") ? "review_required" : "review", archify: { skill_status: skill.status, mode: skill.mode, sha256: skill.sha256, implementation: skill.implementation } }, null, 2)}\n`);
   return { status: "review" as const, run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, repository_sources: catalog.repositories, knowledge_catalog: catalog, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
