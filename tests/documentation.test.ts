@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDocumentModel, ASD_SECTIONS } from "../src/documentation/model.js";
 import { renderDocument } from "../src/documentation/render.js";
-import { buildCandidateVault } from "../src/obsidian/vault.js";
+import { buildCandidateVault, renderScopedFlowDocumentation } from "../src/obsidian/vault.js";
 import type { Fact, KnowledgeGraph, Snapshot } from "../src/contracts/types.js";
 import type { EffectiveConfiguration } from "../src/config.js";
 import { prepareRunDocumentation } from "../src/run_services.js";
@@ -155,6 +155,18 @@ test("la bóveda genera arquitectura, relaciones y un Mermaid por endpoint", asy
   const classFiles = await readFile(join(root, "Servicios", "login", branchKey("main"), "servicio.md"), "utf8");
   assert.match(classFiles, /Navegación por código/u);
   assert.match(classFiles, /clases\/logincontroller/u);
+});
+
+test("la documentación acotada renderiza únicamente el endpoint solicitado", () => {
+  const facts: Fact[] = [
+    { schema_version: 3, id: "admin", kind: "http_endpoint", component_id: "gr", value: { method: "GET", path: "/permisos-admin", handler_expression: "permissionHandler.getAdminPermissions", source_path: "api/PermissionRouter.java" }, evidence_ids: ["ev-admin"], rule_id: "webflux.functional-route" },
+    { schema_version: 3, id: "other", kind: "http_endpoint", component_id: "gr", value: { method: "PUT", path: "/permisos-dni", handler_expression: "permissionHandler.updateByDni", source_path: "api/PermissionRouter.java" }, evidence_ids: ["ev-other"], rule_id: "webflux.functional-route" },
+    { schema_version: 3, id: "handler", kind: "code_symbol", component_id: "gr", value: { symbol_id: "handler.get", name: "getAdminPermissions", symbol_type: "method", class_name: "PermissionHandler", signature: "getAdminPermissions(ServerRequest)", description: "Consulta permisos administrativos.", source_path: "api/PermissionHandler.java", start_line: 10, snippet: "return useCase.getPermissions();" }, evidence_ids: ["ev-handler"], rule_id: "source.symbol" },
+  ];
+  const document = renderScopedFlowDocumentation("gr", "GET", "/permisos-admin", facts);
+  assert.match(document.markdown, /GET \/permisos-admin/u);
+  assert.match(document.markdown, /PermissionHandler/u);
+  assert.doesNotMatch(document.markdown, /permisos-dni/u);
 });
 
 test("publicar un run parcial conserva los repositorios publicados anteriormente", async () => {

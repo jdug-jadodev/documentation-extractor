@@ -36,6 +36,29 @@ export interface FlowTrace {
     paths: FlowPath[];
     limitations: string[];
 }
+export interface DocumentableFlow {
+    component: string;
+    method: string;
+    path: string;
+    handler: string;
+    source_path: string;
+    score: number;
+}
+export declare function findDocumentableFlows(component: string, query: string, facts: readonly Fact[], limit?: number): DocumentableFlow[];
+export declare function prepareFlowDocumentation(config: EffectiveConfiguration, runId: string, component: string, method: string, path: string): Promise<{
+    schema_version: number;
+    status: string;
+    scope: string;
+    run_id: string;
+    component: string;
+    method: string;
+    path: string;
+    handler: string;
+    source_path: string;
+    markdown_path: string;
+    repository_reads: number;
+    ai_invocations: number;
+}>;
 export declare function prepareRunDocumentation(packageRoot: string, config: EffectiveConfiguration, runId: string): Promise<{
     status: "review";
     run_id: string;

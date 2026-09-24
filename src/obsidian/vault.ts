@@ -11,6 +11,7 @@ import { semanticFlows, traceEndpointFlow, type SemanticFlow, type SemanticSymbo
 interface ModuleEdge { from: string; to: string; imports: string[]; }
 interface FlowPoint extends ResolvedEndpoint { direction: "entrada" | "salida"; transport: string; target: string; }
 interface ServiceFlow { endpoint: FlowPoint; slug: string; path: string; module_edges: ModuleEdge[]; semantic: SemanticFlow | null; }
+export interface ScopedFlowDocument { method: string; path: string; handler: string; source_path: string; slug: string; markdown: string; }
 export interface RepositoryProfileOverride { type?: string; label?: string; domain?: string; }
 export type RepositoryProfileOverrides = Readonly<Record<string, RepositoryProfileOverride>>;
 type RepositoryGroup = "clients" | "services" | "components";
@@ -53,6 +54,22 @@ export async function buildCandidateVault(root: string, model: DocumentModel, gr
   await atomicWrite(join(root, "Mapas", "microservicios.md"), renderMicroserviceDocument(graph, facts, profileOverrides));
   await mkdir(join(root, "Flujos"), { recursive: true });
   await atomicWrite(join(root, "Flujos", "end-to-end.md"), renderEndToEnd(graph, facts, allFlows, profileOverrides));
+}
+
+/** Renders exactly one already-indexed HTTP flow; it never reads an application repository. */
+export function renderScopedFlowDocumentation(repositoryId: string, method: string, path: string, facts: readonly Fact[]): ScopedFlowDocument {
+  const serviceFacts = facts.filter((fact) => fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`));
+  const endpoint = resolveEndpointFacts(serviceFacts).find((item) => item.component === repositoryId && item.method.toUpperCase() === method.toUpperCase() && normalizeRoute(item.path) === normalizeRoute(path));
+  if (endpoint === undefined) throw new Error(`No existe un flujo indexado para ${repositoryId} ${method.toUpperCase()} ${path}.`);
+  const point: FlowPoint = { ...endpoint, direction: "entrada", transport: "servidor HTTP", target: repositoryId };
+  const flow: ServiceFlow = {
+    endpoint: point,
+    slug: flowSlug(point),
+    path: "",
+    module_edges: reachableModuleEdges(repositoryId, endpoint.source_path, moduleEdges(serviceFacts)),
+    semantic: traceEndpointFlow(endpoint, serviceFacts),
+  };
+  return { method: endpoint.method, path: endpoint.path, handler: endpoint.handler, source_path: endpoint.source_path, slug: flow.slug, markdown: renderFlowDocument(flow, repositoryId) };
 }
 
 function createServiceFlows(repositoryId: string, serviceRoot: string, facts: readonly Fact[], graph: KnowledgeGraph): ServiceFlow[] {
@@ -349,6 +366,7 @@ function reachableModuleEdges(component: string, start: string, graph: ReadonlyM
 }
 
 function flowSlug(endpoint: FlowPoint): string { const prefix = endpoint.direction === "salida" ? "salida-" : ""; return `${prefix}${endpoint.method}-${endpoint.path}`.toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "endpoint"; }
+function normalizeRoute(value: string): string { const normalized = value.trim().replace(/\/{2,}/gu, "/").replace(/\/$/u, ""); return normalized || "/"; }
 function semanticSymbol(fact: Fact): SemanticSymbol | null { const value = asRecord(fact.value), id = String(value.symbol_id ?? ""), name = String(value.name ?? ""); if (id === "" || name === "") return null; return { id, name, class_name: typeof value.class_name === "string" ? value.class_name : null, symbol_type: String(value.symbol_type ?? "symbol"), signature: String(value.signature ?? name), description: String(value.description ?? "Descripción no disponible."), source_path: String(value.source_path ?? ""), start_line: typeof value.start_line === "number" ? value.start_line : null, end_line: typeof value.end_line === "number" ? value.end_line : null, snippet: String(value.snippet ?? "") }; }
 function symbolLabel(symbol: SemanticSymbol): string { return symbol.class_name === null ? symbol.name : `${symbol.class_name}.${symbol.name}`; }
 function portableSlug(value: string): string { return value.normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "simbolo"; }

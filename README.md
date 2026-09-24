@@ -78,7 +78,7 @@ Para actualizar solo el agente y la configuración MCP después de actualizar el
 pnpm workspace:install -- --workspace C:\ruta\equipo.code-workspace --integration-only --force
 ```
 
-El instalador coloca en la carpeta contenedora del workspace únicamente `knowledge.yaml`, `.vscode/mcp.json`, `.mcp.json` y los archivos `.github` de integración. También incorpora esa carpeta de control como primera raíz del workspace para que los clientes descubran la configuración; no la autoriza como repositorio analizable ni escribe dentro de las aplicaciones. El motor conserva sus ocho roles, parsers, binarios y estado privado.
+El instalador coloca en la carpeta contenedora del workspace únicamente `knowledge.yaml`, `.vscode/mcp.json` y los archivos `.github` de integración. También incorpora esa carpeta de control como primera raíz del workspace para que VS Code descubra una sola definición del servidor; no la autoriza como repositorio analizable ni escribe dentro de las aplicaciones. Si otro cliente necesita el formato portátil, se puede generar adicionalmente `.mcp.json` con `--portable-mcp`. El motor conserva sus ocho roles, parsers, binarios y estado privado.
 
 ## Arquitectura
 

@@ -2,12 +2,17 @@
 
 Para consultar o documentar aplicaciones utiliza únicamente las herramientas `docsys_*` del servidor MCP local `sistema-documentacion` y los `TaskPacket` preparados por el motor Node.js. No explores repositorios para inventariar ni compenses una ejecución ausente con `read`, `search`, terminal u otras conexiones.
 
+REGLA DE CORTE: si una herramienta `docsys_*` no está disponible, falla o no resuelve el pedido, informa la limitación y detente. Está prohibido usar `read`, `search`, búsquedas regex, terminal o abrir archivos Router/Handler como alternativa, incluso si el usuario pide un único flujo.
+
+Para garantía estricta, el usuario debe ejecutar estas solicitudes con el agente personalizado `sistema-documentacion`, cuya lista de herramientas no incluye acceso a archivos ni terminal. Si están disponibles `read` o `search`, detente e indica que el agente correcto no está seleccionado.
+
 - Solo participan repositorios habilitados y miembros del workspace configurado.
 - Si el estado es `Configuración pendiente`, no inicies análisis.
 - Cuando el usuario pida actualizar el conocimiento o la documentación vigente, llama `docsys_refresh_knowledge`: sincroniza ramas con `fetch` y `pull --ff-only`, compara commits y, si hay cambios, procesa solo los archivos afectados y publica la vista completa. Si no hay cambios, reutiliza el run actual.
 - Usa `docsys_prepare_analysis` solo cuando el usuario solicite una captura nueva sin sincronizar ni publicar, por ejemplo para comparar una rama concreta.
 - `docsys_prepare_documentation` transforma un run en Markdown ASD-TSE-100, valida mecánicamente y publica automáticamente una edición inmutable y la vista `Actual` en Obsidian.
 - Para preguntas sobre un servicio o una ruta concreta usa primero `docsys_explain_service` o `docsys_explain_endpoint`; consumen el flujo AST precalculado y compacto. Reserva `docsys_query` para inspecciones de hechos que no estén en esas respuestas.
+- Para localizar un flujo por nombre funcional usa `docsys_find_flows`; para generar únicamente ese flujo usa `docsys_document_flow`. Esta operación escribe un solo Markdown en `Consultas` y no lee el repositorio ni reconstruye la bóveda completa.
 - `docsys_prepare_proposal` deja ADRs, especificaciones y migraciones como borradores Markdown en Obsidian.
 - Los hechos, evidencias, limitaciones y contratos `schema_version: 3` son canónicos; el modelo no los modifica.
 - Interpreta cada repositorio como un límite de sistema independiente. Una arista de consumo no significa propiedad, contención ni que el proveedor dependa del consumidor. Respeta `overrides.repository_metadata` para distinguir aplicaciones cliente, microservicios, APIs, bibliotecas y dominios organizacionales.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Fact, KnowledgeGraph } from "../src/contracts/types.js";
-import { explainRelations, queryRunArtifacts, traceFlow, type RunArtifacts } from "../src/run_services.js";
+import { explainRelations, findDocumentableFlows, queryRunArtifacts, traceFlow, type RunArtifacts } from "../src/run_services.js";
 import { explainEndpointFromFacts, explainServiceFromFacts } from "../src/documentation/semantic.js";
 
 const graph: KnowledgeGraph = {
@@ -64,4 +64,14 @@ test("las explicaciones compactas usan el flujo precalculado sin devolver todos 
   const service = explainServiceFromFacts("run-test", "pedidos", facts, graph) as { technologies: string[]; summary: { symbols: number } };
   assert.deepEqual(service.technologies, ["express"]);
   assert.equal(service.summary.symbols, 2);
+});
+
+test("la búsqueda funcional localiza un flujo sin leer el repositorio", () => {
+  const facts: Fact[] = [
+    { schema_version: 3, id: "admin", kind: "http_endpoint", component_id: "gr", value: { method: "GET", path: "/permisos-admin", handler_expression: "permissionHandler.getAdminPermissions", source_path: "api/PermissionRouter.java" }, evidence_ids: ["ev-admin"], rule_id: "webflux.functional-route" },
+    { schema_version: 3, id: "user", kind: "http_endpoint", component_id: "gr", value: { method: "PUT", path: "/permisos-dni", handler_expression: "permissionHandler.updateByDni", source_path: "api/PermissionRouter.java" }, evidence_ids: ["ev-user"], rule_id: "webflux.functional-route" },
+  ];
+  const matches = findDocumentableFlows("gr", "permisos de administración", facts);
+  assert.equal(matches[0]?.path, "/permisos-admin");
+  assert.equal(matches[0]?.method, "GET");
 });

@@ -4,7 +4,7 @@ import * as z from "zod/v4";
 import { ContractValidator } from "./contracts/validator.js";
 import { configurationState, loadConfiguration } from "./config.js";
 import { runDeterministicScenario } from "./engine.js";
-import { explainRelations, loadRunArtifacts, loadWorkspaceArtifacts, prepareAndPublishDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
+import { explainRelations, findDocumentableFlows, loadRunArtifacts, loadWorkspaceArtifacts, prepareAndPublishDocumentation, prepareFlowDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
 import { explainEndpointFromFacts, explainServiceFromFacts } from "./documentation/semantic.js";
 import { stageProposalDraft } from "./publication/draft.js";
 import { refreshKnowledge } from "./refresh.js";
@@ -88,6 +88,22 @@ export async function buildDocumentationMcp(options) {
         const config = await loadConfiguration(options.configPath, validator);
         const artifacts = await loadWorkspaceArtifacts(config, run_id);
         return explainEndpointFromFacts(run_id, component, method, path, artifacts.facts);
+    }));
+    server.registerTool("docsys_find_flows", {
+        description: "Localiza flujos HTTP en hechos ya indexados mediante una frase, ruta o handler. No lee ni busca en repositorios y no invoca IA.",
+        inputSchema: z.object({ run_id: z.string().min(1), component: z.string().min(1), query: z.string().min(1), limit: z.number().int().min(1).max(100).optional() }),
+    }, async ({ run_id, component, query, limit }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        const artifacts = await loadWorkspaceArtifacts(config, run_id);
+        const candidates = findDocumentableFlows(component, query, artifacts.facts, limit ?? 20);
+        return { schema_version: 3, run_id, component, query, candidates, total: candidates.length, repository_reads: 0, ai_invocations: 0 };
+    }));
+    server.registerTool("docsys_document_flow", {
+        description: "Genera un único Markdown de flujo desde hechos y AST ya indexados y lo guarda en Consultas de Obsidian. No lee el repositorio, no reanaliza y no genera la documentación completa.",
+        inputSchema: z.object({ run_id: z.string().min(1), component: z.string().min(1), method: z.string().min(1), path: z.string().min(1) }),
+    }, async ({ run_id, component, method, path }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await prepareFlowDocumentation(config, run_id, component, method, path);
     }));
     server.registerTool("docsys_prepare_proposal", {
         description: "Prepara un borrador determinista de especificación, migración o ADR basado en un run. Siempre queda pendiente de revisión; no modifica aplicaciones.",

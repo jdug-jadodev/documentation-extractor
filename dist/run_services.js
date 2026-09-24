@@ -5,16 +5,58 @@ import { createProposal } from "./proposal/model.js";
 import { atomicWrite } from "./platform/fs.js";
 import { stableId } from "./platform/hash.js";
 import { queryFacts, renderFactTable } from "./query.js";
-import { createDocumentModel } from "./documentation/model.js";
+import { createDocumentModel, resolveEndpointFacts } from "./documentation/model.js";
 import { renderDocument } from "./documentation/render.js";
-import { buildCandidateVault } from "./obsidian/vault.js";
+import { buildCandidateVault, renderScopedFlowDocumentation } from "./obsidian/vault.js";
 import { validateDocument } from "./review/validators.js";
 import { loadArchifySkill } from "./documentation/skill.js";
 import { createAutomaticPublicationReceipt } from "./review/approval.js";
 import { LocalPublicationTarget } from "./publication/local.js";
 import { createPublicationManifest } from "./publication/manifest.js";
 import { buildGraph } from "./correlation/graph.js";
-import { redactValue } from "./security/redaction.js";
+import { assertNoKnownSecret, redactValue } from "./security/redaction.js";
+export function findDocumentableFlows(component, query, facts, limit = 20) {
+    const tokens = searchTokens(query);
+    if (tokens.length === 0)
+        return [];
+    return resolveEndpointFacts(facts)
+        .filter((endpoint) => endpoint.component === component)
+        .map((endpoint) => {
+        const pathWords = searchTokens(`${endpoint.method} ${endpoint.path}`);
+        const contextWords = searchTokens(`${endpoint.handler} ${endpoint.source_path}`);
+        const score = tokens.reduce((total, token) => {
+            if (pathWords.some((word) => word === token))
+                return total + 8;
+            if (pathWords.some((word) => prefixMatch(word, token)))
+                return total + 5;
+            if (contextWords.some((word) => word === token))
+                return total + 3;
+            return total + (contextWords.some((word) => prefixMatch(word, token)) ? 1 : 0);
+        }, 0);
+        return { component, method: endpoint.method, path: endpoint.path, handler: endpoint.handler, source_path: endpoint.source_path, score };
+    })
+        .filter((candidate) => candidate.score > 0)
+        .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.method.localeCompare(b.method))
+        .slice(0, Math.max(1, Math.min(limit, 100)));
+}
+export async function prepareFlowDocumentation(config, runId, component, method, path) {
+    const artifacts = await loadWorkspaceArtifacts(config, runId);
+    const document = renderScopedFlowDocumentation(component, method, path, artifacts.facts);
+    assertNoKnownSecret(document.markdown);
+    const output = join(config.vault_root, "Consultas", safeSegment(runId), safeSegment(component), `${document.slug}.md`);
+    await atomicWrite(output, document.markdown);
+    return { schema_version: 3, status: "generated", scope: "single_flow", run_id: runId, component, method: document.method, path: document.path, handler: document.handler, source_path: document.source_path, markdown_path: output, repository_reads: 0, ai_invocations: 0 };
+}
+function searchTokens(value) {
+    const stop = new Set(["de", "del", "el", "la", "los", "las", "para", "flujo"]);
+    const normalized = value.normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").toLocaleLowerCase("en-US");
+    const raw = normalized.split(/[^a-z0-9]+/gu).filter((token) => token.length >= 2 && !stop.has(token));
+    if (/administracion|administrativo/u.test(normalized))
+        raw.push("admin");
+    return [...new Set(raw)];
+}
+function safeSegment(value) { return value.replace(/[^A-Za-z0-9._-]+/gu, "-").replace(/^-+|-+$/gu, "") || "item"; }
+function prefixMatch(left, right) { return left.length >= 4 && right.length >= 4 && (left.startsWith(right) || right.startsWith(left)); }
 export async function prepareRunDocumentation(packageRoot, config, runId) {
     const requestedArtifacts = await loadRunArtifacts(config, runId);
     const { artifacts, catalog } = await composeWorkspaceArtifacts(config, requestedArtifacts);
