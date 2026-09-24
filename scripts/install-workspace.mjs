@@ -44,9 +44,10 @@ async function main() {
   assertSupportedNode();
   const workspaceArgument = argument("--workspace");
   const vaultArgument = argument("--vault");
-  if (!workspaceArgument || !vaultArgument) throw Object.assign(new Error("Uso: pnpm workspace:install -- --workspace <archivo.code-workspace> --vault <bóveda> [--repository-ids id1,id2] [--branch main] [--force]"), { exitCode: 2 });
+  const integrationOnly = process.argv.includes("--integration-only");
+  if (!workspaceArgument || (!integrationOnly && !vaultArgument)) throw Object.assign(new Error("Uso: pnpm workspace:install -- --workspace <archivo.code-workspace> --vault <bóveda> [--repository-ids id1,id2] [--branch main] [--force] | --workspace <archivo.code-workspace> --integration-only --force"), { exitCode: 2 });
   const workspaceFile = resolve(workspaceArgument);
-  const vaultPath = resolve(vaultArgument);
+  const vaultPath = vaultArgument ? resolve(vaultArgument) : null;
   const workspaceRoot = dirname(workspaceFile);
   const configPath = resolve(argument("--config", join(workspaceRoot, "knowledge.yaml")));
   const statePath = resolve(argument("--state", join(packageRoot, ".knowledge", "workspaces", slug(basename(workspaceRoot)))));
@@ -73,20 +74,20 @@ async function main() {
     used.add(id);
     return { id, path: root };
   });
-  const yaml = [
+  const yaml = vaultPath === null ? null : [
     "schema_version: 3", "setup_status: configured", `workspace_file: ${yamlString(workspaceFile)}`, `vault_path: ${yamlString(vaultPath)}`, `state_path: ${yamlString(statePath)}`, "repositories:",
     ...repositories.flatMap((repo) => [`  - id: ${yamlString(repo.id)}`, `    path: ${yamlString(repo.path)}`, "    enabled: true", `    default_branch: ${yamlString(branch)}`]),
     "ai:", "  provider: copilot-cli", "  model: null", "  strong_model: null", "  max_invocations: 8", "sharing:", "  mode: local", "azure:", "  enabled: false", "",
   ].join("\n");
   const mcp = `${JSON.stringify({ servers: { "sistema-documentacion": { type: "stdio", command: process.execPath, args: [join(packageRoot, "scripts", "mcp.mjs"), "--config", configPath] } } }, null, 2)}\n`;
   const portableMcp = `${JSON.stringify({ mcpServers: { "sistema-documentacion": { type: "local", command: process.execPath, args: [join(packageRoot, "scripts", "mcp.mjs"), "--config", configPath], env: {}, tools: ["*"] } } }, null, 2)}\n`;
-  await put(configPath, yaml, force);
+  if (!integrationOnly && yaml !== null) await put(configPath, yaml, force);
   await put(join(workspaceRoot, ".vscode", "mcp.json"), mcp, force);
   await put(join(workspaceRoot, ".mcp.json"), portableMcp, force);
   await copy(join(packageRoot, ".github", "copilot-instructions.md"), join(workspaceRoot, ".github", "copilot-instructions.md"), force);
   await copy(join(packageRoot, ".github", "agents", "orquestador.agent.md"), join(workspaceRoot, ".github", "agents", "orquestador.agent.md"), force);
   await copy(join(packageRoot, ".github", "skills", "archify-documentation", "SKILL.md"), join(workspaceRoot, ".github", "skills", "archify-documentation", "SKILL.md"), force);
-  process.stdout.write(`${JSON.stringify({ status: "configured", workspace_file: workspaceFile, controller_folder: workspaceRoot, config_path: configPath, state_path: statePath, vault_path: vaultPath, repositories, vscode_mcp_config: join(workspaceRoot, ".vscode", "mcp.json"), portable_mcp_config: join(workspaceRoot, ".mcp.json"), automatic_analysis: false }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ status: "configured", mode: integrationOnly ? "integration_only" : "full", workspace_file: workspaceFile, controller_folder: workspaceRoot, config_path: configPath, state_path: statePath, vault_path: vaultPath, repositories, vscode_mcp_config: join(workspaceRoot, ".vscode", "mcp.json"), portable_mcp_config: join(workspaceRoot, ".mcp.json"), automatic_analysis: false }, null, 2)}\n`);
 }
 
 main().catch(handleScriptError);

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { KnowledgeGraph } from "../src/contracts/types.js";
+import type { Fact, KnowledgeGraph } from "../src/contracts/types.js";
 import { explainRelations, queryRunArtifacts, traceFlow, type RunArtifacts } from "../src/run_services.js";
+import { explainEndpointFromFacts, explainServiceFromFacts } from "../src/documentation/semantic.js";
 
 const graph: KnowledgeGraph = {
   schema_version: 3,
@@ -45,4 +46,22 @@ test("P86: cobertura y evidencia usan sus índices tipados", () => {
   } satisfies RunArtifacts;
   assert.equal(queryRunArtifacts(artifacts, "coverage").total, 1);
   assert.equal(queryRunArtifacts(artifacts, "evidence", { repositoryId: "pedidos" }).total, 1);
+});
+
+test("las explicaciones compactas usan el flujo precalculado sin devolver todos los hechos", () => {
+  const facts: Fact[] = [
+    { schema_version: 3, id: "endpoint", kind: "http_endpoint", component_id: "pedidos", value: { method: "POST", path: "/orders", handler_expression: "controller.create", source_path: "routes.ts" }, evidence_ids: ["ev-1"], rule_id: "test" },
+    { schema_version: 3, id: "construction", kind: "object_construction", component_id: "pedidos", value: { variable: "controller", constructed_type: "OrderController", arguments: [], source_path: "routes.ts" }, evidence_ids: ["ev-1"], rule_id: "test" },
+    { schema_version: 3, id: "controller", kind: "code_symbol", component_id: "pedidos", value: { symbol_id: "controller.create", name: "create", symbol_type: "method", class_name: "OrderController", signature: "create(input)", description: "Recibe la orden.", source_path: "controller.ts", start_line: 4 }, evidence_ids: ["ev-2"], rule_id: "test" },
+    { schema_version: 3, id: "usecase", kind: "code_symbol", component_id: "pedidos", value: { symbol_id: "usecase.execute", name: "execute", symbol_type: "method", class_name: "CreateOrder", signature: "execute(input)", description: "Crea la orden.", source_path: "usecase.ts", start_line: 5 }, evidence_ids: ["ev-3"], rule_id: "test" },
+    { schema_version: 3, id: "call", kind: "symbol_call", component_id: "pedidos", value: { caller_symbol_id: "controller.create", callee_name: "execute", receiver: "this.useCase", expression: "this.useCase.execute", target_symbol_id: "usecase.execute", resolution: "supported" }, evidence_ids: ["ev-2"], rule_id: "test" },
+    { schema_version: 3, id: "data", kind: "data_write", component_id: "pedidos", value: { entity: "orders", operation: "insert", source_path: "usecase.ts" }, evidence_ids: ["ev-4"], rule_id: "test" },
+    { schema_version: 3, id: "tech", kind: "package_dependency", component_id: "pedidos", value: { package: "express" }, evidence_ids: ["ev-5"], rule_id: "test" }
+  ];
+  const endpoint = explainEndpointFromFacts("run-test", "pedidos", "POST", "/orders", facts) as { steps?: Array<{ name: string }>; data?: Array<{ entity: string }> };
+  assert.deepEqual(endpoint.steps?.map((step) => step.name), ["create", "execute"]);
+  assert.equal(endpoint.data?.[0]?.entity, "orders");
+  const service = explainServiceFromFacts("run-test", "pedidos", facts, graph) as { technologies: string[]; summary: { symbols: number } };
+  assert.deepEqual(service.technologies, ["express"]);
+  assert.equal(service.summary.symbols, 2);
 });

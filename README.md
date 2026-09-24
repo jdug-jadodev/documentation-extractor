@@ -4,7 +4,7 @@ Motor local y determinista que extrae hechos de repositorios autorizados, correl
 
 ## Estado
 
-El motor está implementado en `src/`. La suite automatizada disponible pasa 45/45 y el servidor MCP se probó por `stdio` sobre un workspace real de tres repositorios. La extracción arquitectónica, la actualización incremental por commit/archivo, los diagramas por servicio/flujo y la publicación automática en Obsidian también se comprobaron en Windows. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado de forma instrumentada los especialistas, Archify externo, Azure ni la matriz Linux/macOS.
+El motor está implementado en `src/`. La suite automatizada disponible pasa 52/52 y el servidor MCP se probó por `stdio` sobre un workspace real de varios repositorios. La extracción AST TypeScript/Java, Spring anotado, WebFlux funcional, Reactor, resolución de llamadas e inyección, actualización incremental por commit/archivo, árboles físicos, páginas por clase/método y diagramas verticales se comprobaron en Windows con fixtures y repositorios reales. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado de forma instrumentada los especialistas, Archify externo, Azure ni la matriz Linux/macOS.
 
 La instalación del motor conserva su `knowledge.yaml` en `configuration_pending`. Cada workspace recibe su propia configuración e integración; los runs privados permanecen en el motor y la bóveda Obsidian es una tercera ubicación separada. Ninguna entrada inicia análisis automáticamente.
 
@@ -64,12 +64,18 @@ pnpm copilot:config cli
 pnpm mcp
 ```
 
-`copilot:config ide` imprime el formato `servers` para VS Code/IntelliJ; `copilot:config cli` imprime `mcpServers` para Copilot CLI. Esos clientes inician `mcp` por `stdio` cuando lo necesitan; no es un daemon permanente. El conector ofrece estado, lista de repositorios, análisis explícito, relaciones, flujos, consultas, propuestas y generación con publicación automática de la documentación final en Obsidian.
+`copilot:config ide` imprime el formato `servers` para VS Code/IntelliJ; `copilot:config cli` imprime `mcpServers` para Copilot CLI. Esos clientes inician `mcp` por `stdio` cuando lo necesitan; no es un daemon permanente. El conector ofrece once herramientas, incluidas `docsys_explain_service` y `docsys_explain_endpoint` para consultar subgrafos precalculados compactos sin reenviar cientos de hechos a Copilot.
 
 Para preparar un workspace sin copiar el motor dentro de él:
 
 ```powershell
 pnpm workspace:install -- --workspace C:\ruta\equipo.code-workspace --vault C:\ruta\boveda-obsidian --repository-ids repo-a,repo-b --branch main
+```
+
+Para actualizar solo el agente y la configuración MCP después de actualizar el motor, sin sobrescribir `knowledge.yaml`:
+
+```powershell
+pnpm workspace:install -- --workspace C:\ruta\equipo.code-workspace --integration-only --force
 ```
 
 El instalador coloca en la carpeta contenedora del workspace únicamente `knowledge.yaml`, `.vscode/mcp.json`, `.mcp.json` y los archivos `.github` de integración. También incorpora esa carpeta de control como primera raíz del workspace para que los clientes descubran la configuración; no la autoriza como repositorio analizable ni escribe dentro de las aplicaciones. El motor conserva sus ocho roles, parsers, binarios y estado privado.
@@ -78,7 +84,7 @@ El instalador coloca en la carpeta contenedora del workspace únicamente `knowle
 
 - `src/contracts/` y `schemas/v3/`: contratos runtime y tipos estrictos.
 - `src/snapshots/`: ramas y commits con Git, sin checkout.
-- `src/discovery/` y `src/extractors/`: inventario y plugins .NET, Spring, JEE/WebLogic, Angular, React, Python y Node/Express; el extractor transversal registra módulos, símbolos, capas, imports, paquetes, scripts y tecnologías.
+- `src/discovery/` y `src/extractors/`: inventario y plugins .NET, Spring, JEE/WebLogic, Angular, React, Python y Node/Express; el extractor transversal AST registra clases, métodos, receptores, llamadas, composición, inyección, fragmentos, módulos, imports y tecnologías para TypeScript/JavaScript y Java.
 - `assets/grammars/`: gramáticas WASM locales con hashes y licencias.
 - `src/correlation/`, `src/engine.ts` y `src/run_services.ts`: escenarios, grafo, relaciones, flujos, comparación y propuestas.
 - `src/mcp.ts`: conexión local de Copilot.

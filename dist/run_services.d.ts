@@ -12,6 +12,17 @@ export interface RunArtifacts {
     inventories: Inventory[];
     graph: KnowledgeGraph;
 }
+interface KnowledgeCatalogEntry {
+    run_id: string;
+    snapshot_id: string;
+    commit_oid: string;
+    requested_ref: string;
+}
+interface KnowledgeCatalog {
+    schema_version: 3;
+    repositories: Record<string, KnowledgeCatalogEntry>;
+    updated_at: string;
+}
 export interface FlowPath {
     nodes: GraphNode[];
     edges: GraphEdge[];
@@ -33,12 +44,16 @@ export declare function prepareRunDocumentation(packageRoot: string, config: Eff
     blocking_issues: number;
     model_status: "final";
     repository_count: number;
+    repository_sources: Record<string, KnowledgeCatalogEntry>;
+    knowledge_catalog: KnowledgeCatalog;
     archify: {
         skill_status: "available" | "missing";
         mode: "archify" | "fallback";
         external_implementation: string | null;
     };
 }>;
+/** Loads the requested run together with the latest published knowledge for repositories not present in it. */
+export declare function loadWorkspaceArtifacts(config: EffectiveConfiguration, runId: string): Promise<RunArtifacts>;
 export declare function prepareAndPublishDocumentation(packageRoot: string, config: EffectiveConfiguration, runId: string): Promise<{
     run_id: string;
     candidate_vault: string;
@@ -46,6 +61,8 @@ export declare function prepareAndPublishDocumentation(packageRoot: string, conf
     blocking_issues: number;
     model_status: "final";
     repository_count: number;
+    repository_sources: Record<string, KnowledgeCatalogEntry>;
+    knowledge_catalog: KnowledgeCatalog;
     archify: {
         skill_status: "available" | "missing";
         mode: "archify" | "fallback";
@@ -107,3 +124,4 @@ export declare function prepareProposal(config: EffectiveConfiguration, runId: s
 }>;
 export declare function proposalIdentifier(runId: string, type: ProposalType, request: string, humanRequirements: readonly string[]): string;
 export declare function validatedRunRoot(stateRoot: string, runId: string): string;
+export {};

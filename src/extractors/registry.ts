@@ -1,6 +1,7 @@
 import type { ExtractorPlugin } from "../contracts/types.js";
 import { createDotnetPlugin } from "./dotnet/index.js";
 import { createJavaSpringPlugin } from "./java_spring/index.js";
+import { createJavaWebFluxPlugin } from "./java_webflux/index.js";
 import { createJavaWeblogicPlugin } from "./java_weblogic/index.js";
 import { createAngularPlugin } from "./js_angular/index.js";
 import { createReactPlugin } from "./js_react/index.js";
@@ -16,6 +17,6 @@ export class PluginRegistry {
   require(id: string): ExtractorPlugin { const plugin = this.get(id); if (!plugin) throw new Error(`Capacidad no soportada: plugin ${id} no instalado.`); return plugin; }
 }
 
-export function builtInPlugins(): ExtractorPlugin[] { return [createSourceArchitecturePlugin(), createDotnetPlugin(), createJavaSpringPlugin(), createJavaWeblogicPlugin(), createAngularPlugin(), createReactPlugin(), createNodeExpressPlugin(), createPythonPlugin()]; }
+export function builtInPlugins(): ExtractorPlugin[] { return [createSourceArchitecturePlugin(), createDotnetPlugin(), createJavaSpringPlugin(), createJavaWebFluxPlugin(), createJavaWeblogicPlugin(), createAngularPlugin(), createReactPlugin(), createNodeExpressPlugin(), createPythonPlugin()]; }
 
 export function capabilityMatrix(registry = new PluginRegistry()) { return { schema_version: 3, plugins: registry.list().map((plugin) => ({ id: plugin.id, version: plugin.version, languages: plugin.supported_languages, capabilities: plugin.capabilities, rules: plugin.rule_versions })) }; }

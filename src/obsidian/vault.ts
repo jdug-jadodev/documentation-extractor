@@ -2,13 +2,15 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { DocumentModel, Fact, GraphEdge, KnowledgeGraph } from "../contracts/types.js";
 import { atomicWrite } from "../platform/fs.js";
+import { stableId } from "../platform/hash.js";
 import { renderDocument } from "../documentation/render.js";
 import { renderEditionIndex, renderGraphTable, serviceDocumentPath } from "./navigation.js";
 import { resolveEndpointFacts, type ResolvedEndpoint } from "../documentation/model.js";
+import { semanticFlows, traceEndpointFlow, type SemanticFlow, type SemanticSymbol } from "../documentation/semantic.js";
 
 interface ModuleEdge { from: string; to: string; imports: string[]; }
 interface FlowPoint extends ResolvedEndpoint { direction: "entrada" | "salida"; transport: string; target: string; }
-interface ServiceFlow { endpoint: FlowPoint; slug: string; path: string; module_edges: ModuleEdge[]; }
+interface ServiceFlow { endpoint: FlowPoint; slug: string; path: string; module_edges: ModuleEdge[]; semantic: SemanticFlow | null; }
 export interface RepositoryProfileOverride { type?: string; label?: string; domain?: string; }
 export type RepositoryProfileOverrides = Readonly<Record<string, RepositoryProfileOverride>>;
 type RepositoryGroup = "clients" | "services" | "components";
@@ -32,12 +34,19 @@ export async function buildCandidateVault(root: string, model: DocumentModel, gr
     const serviceRoot = join(root, ...serviceRootPortable.split("/"));
     await mkdir(join(serviceRoot, "flujos"), { recursive: true });
     await mkdir(join(serviceRoot, "diagramas"), { recursive: true });
+    await mkdir(join(serviceRoot, "clases"), { recursive: true });
+    await mkdir(join(serviceRoot, "metodos"), { recursive: true });
     const serviceFlows = createServiceFlows(repositoryId, serviceRootPortable, serviceFacts, graph);
     allFlows.push(...serviceFlows);
     const architecture = renderServiceArchitecture(repositoryId, serviceFacts, graph, facts, profileOverrides);
     await atomicWrite(join(serviceRoot, "diagramas", "arquitectura.md"), `# Arquitectura de ${repositoryId}\n\n> El bloque principal delimita únicamente este repositorio. Los otros sistemas se muestran fuera del bloque: una flecha expresa consumo o integración, no propiedad. Las líneas discontinuas representan relaciones candidatas o no resueltas.\n\n\`\`\`mermaid\n${architecture}\n\`\`\`\n\n${renderServiceRelations(repositoryId, graph, facts, profileOverrides)}\n`);
+    await atomicWrite(join(serviceRoot, "diagramas", "estructura.md"), renderRepositoryStructure(repositoryId, serviceFacts));
+    await atomicWrite(join(serviceRoot, "diagramas", "modulos.md"), renderBuildModules(repositoryId, serviceFacts));
+    await atomicWrite(join(serviceRoot, "diagramas", "capas.md"), renderLayers(repositoryId, serviceFacts));
+    await atomicWrite(join(serviceRoot, "diagramas", "routers.md"), renderRouters(repositoryId, serviceFacts));
     for (const flow of serviceFlows) await atomicWrite(join(root, ...flow.path.split("/")), renderFlowDocument(flow, repositoryId));
-    await atomicWrite(join(serviceRoot, "servicio.md"), `${renderDocument(serviceModel)}\n${renderServiceVisualIndex(repositoryId, architecture, serviceFlows, graph, facts, profileOverrides)}\n`);
+    const symbolIndex = await writeSymbolPages(serviceRoot, serviceRootPortable, repositoryId, serviceFacts);
+    await atomicWrite(join(serviceRoot, "servicio.md"), `${renderDocument(serviceModel)}\n${renderServiceVisualIndex(repositoryId, architecture, serviceFlows, graph, facts, profileOverrides)}\n${symbolIndex}\n`);
   }
   await mkdir(join(root, "Mapas"), { recursive: true });
   await atomicWrite(join(root, "Mapas", "relaciones.md"), `# Arquitectura general\n\n> Cada repositorio se representa como un sistema independiente. Las flechas expresan consumo o integración, nunca propiedad ni contención.\n\n\`\`\`mermaid\n${renderMicroserviceMermaid(graph, facts, profileOverrides)}\n\`\`\`\n\n${renderGraphTable(graph)}\n`);
@@ -48,8 +57,10 @@ export async function buildCandidateVault(root: string, model: DocumentModel, gr
 
 function createServiceFlows(repositoryId: string, serviceRoot: string, facts: readonly Fact[], graph: KnowledgeGraph): ServiceFlow[] {
   const internal = moduleEdges(facts);
+  const semanticByEndpoint = new Map(semanticFlows(repositoryId, facts).map((flow) => [`${flow.endpoint.method}\0${flow.endpoint.path}\0${flow.endpoint.source_path}`, flow]));
   const counters = new Map<string, number>();
-  const incoming: FlowPoint[] = resolveEndpointFacts(facts).filter((endpoint) => endpoint.component === repositoryId).map((endpoint) => ({ ...endpoint, direction: "entrada", transport: "servidor HTTP", target: repositoryId }));
+  const endpoints: FlowPoint[] = resolveEndpointFacts(facts).filter((endpoint) => endpoint.component === repositoryId).map((endpoint) => ({ ...endpoint, direction: "entrada", transport: "servidor HTTP", target: repositoryId }));
+  const incoming: FlowPoint[] = [...endpoints, ...screenFlowPoints(repositoryId, facts)];
   const outgoing: FlowPoint[] = facts.filter((fact) => fact.kind === "http_client_call").map((fact) => {
     const value = asRecord(fact.value), edge = graph.edges.find((item) => item.type === "calls_http" && item.fact_ids.includes(fact.id));
     const targetNode = edge ? graph.nodes.find((node) => node.id === edge.to) : undefined;
@@ -70,26 +81,87 @@ function createServiceFlows(repositoryId: string, serviceRoot: string, facts: re
     const base = flowSlug(endpoint);
     const count = (counters.get(base) ?? 0) + 1; counters.set(base, count);
     const slug = count === 1 ? base : `${base}-${count}`;
-    return { endpoint, slug, path: `${serviceRoot}/flujos/${slug}.md`, module_edges: reachableModuleEdges(repositoryId, endpoint.source_path, internal) };
+    const semantic = endpoint.direction === "entrada" ? semanticByEndpoint.get(`${endpoint.method}\0${endpoint.path}\0${endpoint.source_path}`) ?? traceEndpointFlow(endpoint, facts) : null;
+    return { endpoint, slug, path: `${serviceRoot}/flujos/${slug}.md`, module_edges: reachableModuleEdges(repositoryId, endpoint.source_path, internal), semantic };
   });
 }
 
+function screenFlowPoints(repositoryId: string, facts: readonly Fact[]): FlowPoint[] {
+  const candidates = facts.filter((fact) => fact.kind === "ui_route" || fact.kind === "ui_component" || (fact.kind === "code_symbol" && asRecord(fact.value).role === "screen"));
+  const seen = new Set<string>(), result: FlowPoint[] = [];
+  for (const fact of candidates) {
+    const value = asRecord(fact.value), handler = String(value.handler ?? value.component ?? value.name ?? value.screen ?? "pantalla"), sourcePath = String(value.source_path ?? value.path ?? "Desconocido");
+    const label = String(value.route ?? value.route_name ?? value.path ?? value.name ?? handler), key = `${sourcePath}\0${handler}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ component: repositoryId, method: "UI", path: `pantalla/${label}`, handler, source_path: sourcePath, status: "entrada de interfaz observada", evidence: fact.evidence_ids.join(", "), direction: "entrada", transport: "interfaz de usuario", target: repositoryId });
+  }
+  return result;
+}
+
+async function writeSymbolPages(serviceRoot: string, serviceRootPortable: string, repositoryId: string, facts: readonly Fact[]): Promise<string> {
+  const entries = facts.filter((fact) => fact.kind === "code_symbol").map((fact) => ({ fact, symbol: semanticSymbol(fact) })).filter((item): item is { fact: Fact; symbol: SemanticSymbol } => item.symbol !== null);
+  const methodFiles = new Map<string, string>();
+  for (const { fact, symbol } of entries.filter((item) => ["method", "constructor", "function"].includes(item.symbol.symbol_type))) {
+    const file = `${portableSlug(`${symbol.class_name ?? "funcion"}-${symbol.name}`)}-${stableId("method-page", repositoryId, symbol.id).slice(-10)}.md`;
+    methodFiles.set(symbol.id, file);
+    const outgoing = facts.filter((item) => item.kind === "symbol_call" && asRecord(item.value).caller_symbol_id === symbol.id).map((item) => asRecord(item.value));
+    const incoming = facts.filter((item) => item.kind === "symbol_call" && asRecord(item.value).target_symbol_id === symbol.id).map((item) => asRecord(item.value));
+    const calls = outgoing.length === 0 ? "- No se observaron llamadas salientes." : outgoing.map((call) => `- \`${String(call.expression ?? call.callee_name)}\` → **${String(call.resolution ?? "unresolved")}**${typeof call.target_path === "string" ? ` en \`${call.target_path}\`` : ""}`).join("\n");
+    const calledBy = incoming.length === 0 ? "- No se encontraron llamadores dentro del repositorio." : incoming.map((call) => `- \`${String(call.caller_class ?? "función independiente")}.${String(call.caller_name ?? "desconocido")}\``).join("\n");
+    const snippet = symbol.snippet === "" ? "Fragmento no disponible." : `\`\`\`${languageForSnippet(symbol.source_path)}\n${symbol.snippet}\n\`\`\``;
+    await atomicWrite(join(serviceRoot, "metodos", file), [`# ${symbol.class_name === null ? "Función" : symbol.symbol_type === "constructor" ? "Constructor" : "Método"} ${symbol.class_name === null ? symbol.name : `${symbol.class_name}.${symbol.name}`}`, "", symbol.description, "", `- Firma: \`${cell(symbol.signature)}\``, `- Archivo: \`${symbol.source_path}\``, `- Líneas: ${symbol.start_line ?? "no disponible"}–${symbol.end_line ?? "no disponible"}`, `- Evidencia: ${fact.evidence_ids.join(", ")}`, "", "## Llamadas realizadas", "", calls, "", "## Llamado por", "", calledBy, "", "## Fragmento observado", "", snippet, "", "[[../servicio|Volver al servicio]]", ""].join("\n"));
+  }
+  const classEntries = entries.filter((item) => ["class", "interface", "record", "enum"].includes(item.symbol.symbol_type));
+  const classLinks: string[] = [];
+  for (const { fact, symbol } of classEntries) {
+    const file = `${portableSlug(symbol.name)}-${stableId("class-page", repositoryId, symbol.id).slice(-10)}.md`;
+    const methods = entries.filter((item) => item.symbol.class_name === symbol.name);
+    const methodLinks = methods.length === 0 ? "- No se detectaron métodos." : methods.map((item) => `- [[../metodos/${(methodFiles.get(item.symbol.id) ?? "").replace(/\.md$/u, "")}|${item.symbol.name}]] — ${item.symbol.description}`).join("\n");
+    const snippet = symbol.snippet === "" ? "Fragmento no disponible." : `\`\`\`${languageForSnippet(symbol.source_path)}\n${symbol.snippet}\n\`\`\``;
+    await atomicWrite(join(serviceRoot, "clases", file), [`# ${symbol.symbol_type} ${symbol.name}`, "", symbol.description, "", `- Archivo: \`${symbol.source_path}\``, `- Líneas: ${symbol.start_line ?? "no disponible"}–${symbol.end_line ?? "no disponible"}`, `- Evidencia: ${fact.evidence_ids.join(", ")}`, "", "## Métodos", "", methodLinks, "", "## Fragmento observado", "", snippet, "", "[[../servicio|Volver al servicio]]", ""].join("\n"));
+    classLinks.push(`- [[clases/${file.replace(/\.md$/u, "")}|${symbol.name}]] — ${methods.length} método(s)`);
+  }
+  const standalone = entries.filter((item) => item.symbol.class_name === null && item.symbol.symbol_type === "function").map((item) => `- [[metodos/${(methodFiles.get(item.symbol.id) ?? "").replace(/\.md$/u, "")}|${item.symbol.name}]] — ${item.symbol.description}`);
+  return ["## Navegación por código", "", `Raíz documental: \`${serviceRootPortable}\``, "", "### Clases e interfaces", "", ...(classLinks.length > 0 ? classLinks : ["- No se detectaron clases o interfaces."]), "", "### Funciones independientes", "", ...(standalone.length > 0 ? standalone : ["- No se detectaron funciones independientes."]), ""].join("\n");
+}
+
 function renderServiceVisualIndex(repositoryId: string, architecture: string, flows: readonly ServiceFlow[], graph: KnowledgeGraph, facts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
-  const flowLinks = flows.length > 0 ? flows.map((flow) => `- [[flujos/${flow.slug}|${flow.endpoint.direction} · ${flow.endpoint.method} ${flow.endpoint.path}]] — \`${flow.endpoint.handler}\``).join("\n") : "- No se detectaron entradas ni llamadas HTTP salientes.";
-  return [`## Diagramas del servicio`, "", `[[diagramas/arquitectura|Abrir arquitectura de ${repositoryId}]]`, "", "```mermaid", architecture, "```", "", "## Flujos HTTP documentados", "", flowLinks, "", "## Relaciones con otros servicios", "", renderServiceRelations(repositoryId, graph, facts, profileOverrides), ""].join("\n");
+  const flowLinks = flows.length > 0 ? flows.map((flow) => `- [[flujos/${flow.slug}|${flow.endpoint.direction} · ${flow.endpoint.method} ${flow.endpoint.path}]] — \`${flow.endpoint.handler}\``).join("\n") : "- No se detectaron endpoints, pantallas ni llamadas HTTP salientes.";
+  return [`## Diagramas del servicio`, "", `- [[diagramas/arquitectura|Arquitectura semántica de ${repositoryId}]]`, `- [[diagramas/estructura|Árbol de carpetas y archivos de ${repositoryId}]]`, `- [[diagramas/modulos|Módulos de build]]`, `- [[diagramas/capas|Capas, roles y archivos]]`, `- [[diagramas/routers|Routers y endpoints]]`, "", "```mermaid", architecture, "```", "", "## Flujos documentados", "", flowLinks, "", "## Relaciones con otros servicios", "", renderServiceRelations(repositoryId, graph, facts, profileOverrides), ""].join("\n");
 }
 
 function renderServiceArchitecture(repositoryId: string, facts: readonly Fact[], graph: KnowledgeGraph, allFacts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
-  const modules = facts.filter((fact) => fact.kind === "source_module");
-  const groups = new Map<string, number>();
-  for (const fact of modules) { const value = asRecord(fact.value), role = String(value.role ?? value.layer ?? "module"); groups.set(role, (groups.get(role) ?? 0) + 1); }
+  const modules = facts.filter((fact) => fact.kind === "source_module" && asRecord(fact.value).source_set !== "test");
   const profile = repositoryProfile(repositoryId, allFacts, profileOverrides);
   const boundaryLabel = `${profile.type_label} · ${profile.label}${profile.domain === null ? "" : ` · Dominio: ${profile.domain}`}`;
-  const lines = ["flowchart LR", `  subgraph boundary["${escapeMermaid(boundaryLabel)}"]`, "    direction TB", `    service["${escapeMermaid(profile.label)}"]`];
+  const symbolsByPath = new Map<string, string[]>();
+  for (const fact of facts.filter((item) => item.kind === "code_symbol")) { const value = asRecord(fact.value), path = String(value.source_path ?? ""), type = String(value.symbol_type ?? ""); if (!["class", "interface", "record", "enum"].includes(type)) continue; symbolsByPath.set(path, [...(symbolsByPath.get(path) ?? []), String(value.name ?? "")]); }
+  const shown = modules.slice(0, 80), nodeByPath = new Map<string, string>(), byLayer = new Map<string, Fact[]>();
+  for (const fact of shown) { const value = asRecord(fact.value), layerName = String(value.layer ?? "root"); byLayer.set(layerName, [...(byLayer.get(layerName) ?? []), fact]); }
+  const lines = ["flowchart TB", `  subgraph boundary["${escapeMermaid(boundaryLabel)}"]`, "    direction TB", `    service["${escapeMermaid(profile.label)}"]`];
   let counter = 0;
-  for (const [role, count] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) { const id = `role${counter++}`; lines.push(`    service --> ${id}["${escapeMermaid(role)} · ${count} módulo(s)"]`); }
-  if (groups.size === 0) lines.push("    service --> empty[\"Sin módulos extraídos\"]");
+  for (const [layerName, layerFacts] of [...byLayer.entries()].sort(([a], [b]) => layerOrder(a) - layerOrder(b) || a.localeCompare(b))) {
+    const layerId = `layer${counter++}`, firstNodes: string[] = [];
+    lines.push(`    subgraph ${layerId}["Capa: ${escapeMermaid(layerName)}"]`, "      direction TB");
+    const byRole = new Map<string, Fact[]>();
+    for (const fact of layerFacts) { const value = asRecord(fact.value), roleName = String(value.role ?? "module"); byRole.set(roleName, [...(byRole.get(roleName) ?? []), fact]); }
+    for (const [roleName, roleFacts] of [...byRole.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const roleId = `role${counter++}`;
+      lines.push(`      subgraph ${roleId}["${escapeMermaid(roleName)}"]`, "        direction TB");
+      for (const fact of roleFacts) { const value = asRecord(fact.value), path = String(value.path ?? value.source_path ?? "unknown"), nodeId = `file${counter++}`, classes = symbolsByPath.get(path) ?? [], label = `${path.split("/").at(-1) ?? path}${classes.length > 0 ? ` · ${classes.slice(0, 3).join(", ")}` : ""}`; nodeByPath.set(path, nodeId); firstNodes.push(nodeId); lines.push(`        ${nodeId}["${escapeMermaid(label)}"]`); }
+      lines.push("      end");
+    }
+    lines.push("    end");
+    if (firstNodes[0] !== undefined) lines.push(`    service --> ${firstNodes[0]}`);
+  }
+  if (modules.length === 0) lines.push("    service --> empty[\"Sin módulos extraídos\"]");
+  if (modules.length > shown.length) lines.push(`    omitted["${modules.length - shown.length} archivos adicionales · ver árbol completo"]`, "    service -.-> omitted");
   lines.push("  end");
+  for (const fact of facts.filter((item) => item.kind === "module_dependency")) { const value = asRecord(fact.value), from = nodeByPath.get(String(value.source_path ?? "")), to = nodeByPath.get(String(value.target_path ?? "")); if (from !== undefined && to !== undefined) lines.push(`  ${from} -->|importa| ${to}`); }
+  const classPath = new Map<string, string>();
+  for (const [path, names] of symbolsByPath) for (const name of names) classPath.set(name, path);
+  for (const fact of facts.filter((item) => item.kind === "dependency_injection")) { const value = asRecord(fact.value), fromPath = classPath.get(String(value.class_name ?? "")), targetType = simpleTypeName(String(value.dependency_type ?? "")), toPath = classPath.get(targetType), from = fromPath === undefined ? undefined : nodeByPath.get(fromPath), to = toPath === undefined ? undefined : nodeByPath.get(toPath); if (from !== undefined && to !== undefined && from !== to) lines.push(`  ${from} -->|inyecta ${escapeMermaid(targetType)}| ${to}`); }
   const componentId = `component:${repositoryId}`;
   for (const edge of graph.edges.filter((item) => item.type === "calls_http" && (item.from === componentId || item.to === componentId))) {
     const otherId = edge.from === componentId ? edge.to : edge.from;
@@ -103,16 +175,65 @@ function renderServiceArchitecture(repositoryId: string, facts: readonly Fact[],
     lines.push(`  ${id}["${escapeMermaid(other)}"]`);
     lines.push(edge.from === componentId ? `  service ${arrow}|"${escapeMermaid(relation)}"| ${id}` : `  ${id} ${arrow}|"${escapeMermaid(relation)}"| service`);
   }
+  lines.push("  classDef service fill:#17324d,color:#fff,stroke:#5aa9e6,stroke-width:2px", "  classDef file fill:#f7fbff,color:#17202a,stroke:#7aa7c7", "  class service service");
+  if (nodeByPath.size > 0) lines.push(`  class ${[...nodeByPath.values()].join(",")} file`);
   return lines.join("\n");
+}
+
+function renderRepositoryStructure(repositoryId: string, facts: readonly Fact[]): string {
+  const files = facts.filter((fact) => fact.kind === "repository_file").map((fact) => String(asRecord(fact.value).path ?? "")).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  const sourceFiles = facts.filter((fact) => fact.kind === "source_module").map((fact) => asRecord(fact.value));
+  const sourceSets = countValues(sourceFiles.map((value) => String(value.source_set ?? "root"))), buildModules = countValues(sourceFiles.map((value) => String(value.build_module ?? ".")));
+  return [`# Estructura de ${repositoryId}`, "", "> Vista física separada de la arquitectura semántica. Incluye código, pruebas, recursos, manifiestos, configuración y documentación que entraron al análisis.", "", `Archivos documentables: **${files.length}**.`, "", "## Árbol", "", "```text", repositoryId, ...(files.length > 0 ? treeLines(files) : ["└── (sin archivos documentables)"]), "```", "", "## Source sets", "", "| Source set | Archivos fuente |", "|---|---:|", ...[...sourceSets.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "## Módulos de build", "", "| Módulo | Archivos fuente |", "|---|---:|", ...[...buildModules.entries()].map(([name, count]) => `| ${cell(name)} | ${count} |`), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
+}
+
+function renderBuildModules(repositoryId: string, facts: readonly Fact[]): string {
+  const sources = facts.filter((fact) => fact.kind === "source_module").map((fact) => asRecord(fact.value));
+  const modules = countValues(sources.map((value) => String(value.build_module ?? ".")));
+  const dependencies = facts.filter((fact) => fact.kind === "build_module_dependency").map((fact) => asRecord(fact.value));
+  return [`# Módulos de build de ${repositoryId}`, "", "| Módulo | Fuentes | Producción | Pruebas |", "|---|---:|---:|---:|", ...[...modules.entries()].map(([name, count]) => `| ${cell(name)} | ${count} | ${sources.filter((value) => String(value.build_module ?? ".") === name && value.source_set !== "test").length} | ${sources.filter((value) => String(value.build_module ?? ".") === name && value.source_set === "test").length} |`), "", "## Dependencias declaradas", "", "| Origen | Destino | Manifiesto |", "|---|---|---|", ...(dependencies.length > 0 ? dependencies.map((value) => `| ${cell(String(value.source_module ?? "."))} | ${cell(String(value.target_module ?? "Desconocido"))} | ${cell(String(value.source_path ?? "Desconocido"))} |`) : ["| No detectado | No detectado | No detectado |"]), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
+}
+
+function renderLayers(repositoryId: string, facts: readonly Fact[]): string {
+  const modules = facts.filter((fact) => fact.kind === "source_module").map((fact) => asRecord(fact.value)).sort((a, b) => String(a.path ?? "").localeCompare(String(b.path ?? "")));
+  return [`# Capas y roles de ${repositoryId}`, "", "| Capa | Rol | Source set | Módulo | Archivo | Puerto |", "|---|---|---|---|---|---|", ...modules.map((value) => `| ${cell(String(value.layer ?? "root"))} | ${cell(String(value.role ?? "module"))} | ${cell(String(value.source_set ?? "root"))} | ${cell(String(value.build_module ?? "."))} | ${cell(String(value.path ?? "Desconocido"))} | ${cell(String(value.port_direction ?? ""))} |`), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
+}
+
+function renderRouters(repositoryId: string, facts: readonly Fact[]): string {
+  const endpoints = facts.filter((fact) => fact.kind === "http_endpoint").map((fact) => asRecord(fact.value)).sort((a, b) => String(a.router_class ?? a.handler_class ?? "").localeCompare(String(b.router_class ?? b.handler_class ?? "")) || Number(a.route_order ?? 0) - Number(b.route_order ?? 0));
+  return [`# Routers y endpoints de ${repositoryId}`, "", "| Router/controlador | Orden | Método | Ruta | Handler | Framework | Predicados | Filtros |", "|---|---:|---|---|---|---|---|---|", ...(endpoints.length > 0 ? endpoints.map((value) => `| ${cell(String(value.router_class ?? value.handler_class ?? "Desconocido"))} | ${cell(String(value.route_order ?? ""))} | ${cell(String(value.method ?? "UNKNOWN"))} | ${cell(String(value.path ?? "Desconocido"))} | ${cell(String(value.handler_expression ?? "Desconocido"))} | ${cell(String(value.framework ?? "Desconocido"))} | ${cell(Array.isArray(value.predicates) ? value.predicates.join(", ") : "")} | ${cell(Array.isArray(value.filters) ? value.filters.join(", ") : "")} |`) : ["| No detectado | | | | | | | |"]), "", "[[../servicio|Volver al servicio]]", ""].join("\n");
 }
 
 function renderFlowDocument(flow: ServiceFlow, repositoryId: string): string {
   const endpoint = flow.endpoint;
+  if (flow.semantic !== null) return renderSemanticFlowDocument(flow, repositoryId);
   return [`# ${endpoint.direction === "entrada" ? "Entrada" : "Salida"} ${endpoint.method} ${endpoint.path}`, "", `Servicio: **${repositoryId}**  `, `Dirección: **${endpoint.direction}**  `, `${endpoint.direction === "entrada" ? "Handler" : "Cliente"} observado: \`${endpoint.handler}\`  `, `Destino correlacionado: **${endpoint.target}**  `, `Estado: **${endpoint.status}**  `, `Archivo de origen: \`${endpoint.source_path}\``, "", "> El diagrama representa dependencias/imports estáticos alcanzables desde el punto observado. No es telemetría ni garantiza el orden de ejecución.", "", "## Diagrama del flujo", "", "```mermaid", renderEndpointMermaid(flow), "```", "", "## Módulos alcanzables", "", "| Origen | Destino | Símbolos importados |", "|---|---|---|", ...(flow.module_edges.length > 0 ? flow.module_edges.map((edge) => `| ${cell(edge.from)} | ${cell(edge.to)} | ${cell(edge.imports.join(", ") || "import lateral")} |`) : [`| ${cell(endpoint.source_path)} | No detectado | No detectado |`]), "", "## Evidencia", "", endpoint.evidence, "", "[[../servicio|Volver al servicio]]", ""].join("\n");
 }
 
+function renderSemanticFlowDocument(flow: ServiceFlow, repositoryId: string): string {
+  const endpoint = flow.endpoint, semantic = flow.semantic!;
+  const methodRows = semantic.symbols.length > 0 ? semantic.symbols.map((symbol, index) => `| ${index + 1} | ${cell(symbol.class_name ?? "Función independiente")} | ${cell(symbol.name)} | ${cell(symbol.description)} | ${cell(symbol.source_path)}:${symbol.start_line ?? "?"} |`) : [`| 1 | No resuelto | ${cell(endpoint.handler)} | No se pudo enlazar con un símbolo AST. | ${cell(endpoint.source_path)} |`];
+  const dataRows = semantic.data.length > 0 ? semantic.data.map((item) => `| ${cell(item.operation)} | ${cell(item.entity)} | ${cell(item.source_path)} | ${cell(item.evidence_ids.join(", "))} |`) : ["| No detectado | No detectado | No detectado | No disponible |"];
+  const integrationRows = semantic.integrations.length > 0 ? semantic.integrations.map((item) => `| ${cell(item.method)} | ${cell(item.target)} | ${cell(item.source_path)} |`) : ["| No detectada | No detectada | No detectada |"];
+  const limitations = semantic.limitations.length > 0 ? semantic.limitations.map((value) => `- ${value}`) : ["- Sin limitaciones semánticas adicionales detectadas."];
+  const snippets = semantic.symbols.filter((symbol) => symbol.snippet !== "").slice(0, 8).flatMap((symbol) => [`### ${symbol.class_name === null ? symbol.name : `${symbol.class_name}.${symbol.name}`}`, "", `\`${symbol.source_path}:${symbol.start_line ?? "?"}\``, "", `\`\`\`${languageForSnippet(symbol.source_path)}\n${symbol.snippet}\n\`\`\``, ""]);
+  return [`# Entrada ${endpoint.method} ${endpoint.path}`, "", `Servicio: **${repositoryId}**  `, `Handler observado: \`${endpoint.handler}\`  `, `Estado: **${endpoint.status}**  `, `Archivo de origen: \`${endpoint.source_path}\``, "", "> El flujo usa llamadas entre símbolos extraídas del AST. No representa telemetría; una llamada candidata o no resuelta se conserva como limitación explícita.", "", "## Diagrama del flujo", "", "```mermaid", renderEndpointMermaid(flow), "```", "", "## Clases y métodos del flujo", "", "| Paso | Clase | Método o función | Responsabilidad derivada | Evidencia de origen |", "|---:|---|---|---|---|", ...methodRows, "", "## Datos utilizados", "", "| Operación | Entidad o recurso | Archivo | Evidencia |", "|---|---|---|---|", ...dataRows, "", "## Integraciones salientes", "", "| Método | Destino | Archivo |", "|---|---|---|", ...integrationRows, "", "## Fragmentos observados", "", ...(snippets.length > 0 ? snippets : ["No hay fragmentos disponibles para este flujo.", ""]), "## Limitaciones", "", ...limitations, "", "## Evidencia del endpoint", "", endpoint.evidence, "", "[[../servicio|Volver al servicio]]", ""].join("\n");
+}
+
 function renderEndpointMermaid(flow: ServiceFlow): string {
-  const ids = new Map<string, string>(), lines = ["flowchart LR"], id = (path: string) => { let value = ids.get(path); if (!value) { value = `m${ids.size}`; ids.set(path, value); } return value; };
+  const ids = new Map<string, string>(), lines = ["flowchart TB"], id = (path: string) => { let value = ids.get(path); if (!value) { value = `m${ids.size}`; ids.set(path, value); } return value; };
+  if (flow.semantic !== null && flow.semantic.symbols.length > 0) {
+    lines.push(`  endpoint["${escapeMermaid(`${flow.endpoint.method} ${flow.endpoint.path}`)}"] --> ${id(flow.semantic.symbols[0]!.id)}["${escapeMermaid(symbolLabel(flow.semantic.symbols[0]!))}"]`);
+    const symbolById = new Map(flow.semantic.symbols.map((symbol) => [symbol.id, symbol]));
+    for (const call of flow.semantic.calls) {
+      const from = symbolById.get(call.caller_symbol_id), to = call.target_symbol_id === null ? undefined : symbolById.get(call.target_symbol_id);
+      if (from === undefined) continue;
+      if (to !== undefined) lines.push(`  ${id(from.id)}["${escapeMermaid(symbolLabel(from))}"] -->|"${escapeMermaid(call.expression)}"| ${id(to.id)}["${escapeMermaid(symbolLabel(to))}"]`);
+      else { const unresolved = id(`unresolved:${call.caller_symbol_id}:${call.expression}`); lines.push(`  ${id(from.id)} -.->|"${escapeMermaid(`${call.expression} · ${call.resolution}`)}"| ${unresolved}["${escapeMermaid(call.callee_name)}"]`); }
+    }
+    for (const item of flow.semantic.data) { const dataId = id(`data:${item.entity}:${item.operation}`), last = [...flow.semantic.symbols].reverse().find((symbol) => symbol.source_path === item.source_path) ?? flow.semantic.symbols.at(-1)!; lines.push(`  ${id(last.id)} -->|"${escapeMermaid(item.operation)}"| ${dataId}[("${escapeMermaid(item.entity)}")]`); }
+    return lines.join("\n");
+  }
   if (flow.endpoint.direction === "entrada") {
     lines.push(`  endpoint["${escapeMermaid(`${flow.endpoint.method} ${flow.endpoint.path}`)}"] --> handler["${escapeMermaid(flow.endpoint.handler)}"]`);
     lines.push(`  handler --> ${id(flow.endpoint.source_path)}["${escapeMermaid(flow.endpoint.source_path)}"]`);
@@ -142,9 +263,9 @@ function renderMicroserviceDocument(graph: KnowledgeGraph, facts: readonly Fact[
 function renderMicroserviceMermaid(graph: KnowledgeGraph, facts: readonly Fact[], profileOverrides: RepositoryProfileOverrides): string {
   const edges = graph.edges.filter((edge) => edge.type === "calls_http");
   const componentNodes = graph.nodes.filter((node) => node.type === "component");
-  if (componentNodes.length === 0 && edges.length === 0) return "flowchart LR\n  empty[\"Sin sistemas ni llamadas HTTP detectadas\"]";
+  if (componentNodes.length === 0 && edges.length === 0) return "flowchart TB\n  empty[\"Sin sistemas ni llamadas HTTP detectadas\"]";
   const ids = new Map<string, string>(), id = (nodeId: string) => { let value = ids.get(nodeId); if (!value) { value = `s${ids.size}`; ids.set(nodeId, value); } return value; };
-  const lines = ["flowchart LR"];
+  const lines = ["flowchart TB"];
   const grouped = new Map<RepositoryGroup, Array<{ nodeId: string; profile: RepositoryProfile }>>([
     ["clients", []], ["services", []], ["components", []]
   ]);
@@ -228,6 +349,21 @@ function reachableModuleEdges(component: string, start: string, graph: ReadonlyM
 }
 
 function flowSlug(endpoint: FlowPoint): string { const prefix = endpoint.direction === "salida" ? "salida-" : ""; return `${prefix}${endpoint.method}-${endpoint.path}`.toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "endpoint"; }
+function semanticSymbol(fact: Fact): SemanticSymbol | null { const value = asRecord(fact.value), id = String(value.symbol_id ?? ""), name = String(value.name ?? ""); if (id === "" || name === "") return null; return { id, name, class_name: typeof value.class_name === "string" ? value.class_name : null, symbol_type: String(value.symbol_type ?? "symbol"), signature: String(value.signature ?? name), description: String(value.description ?? "Descripción no disponible."), source_path: String(value.source_path ?? ""), start_line: typeof value.start_line === "number" ? value.start_line : null, end_line: typeof value.end_line === "number" ? value.end_line : null, snippet: String(value.snippet ?? "") }; }
+function symbolLabel(symbol: SemanticSymbol): string { return symbol.class_name === null ? symbol.name : `${symbol.class_name}.${symbol.name}`; }
+function portableSlug(value: string): string { return value.normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "simbolo"; }
+function languageForSnippet(path: string): string { if (/\.java$/iu.test(path)) return "java"; if (/\.tsx$/iu.test(path)) return "tsx"; if (/\.[cm]?ts$/iu.test(path)) return "typescript"; return "javascript"; }
+function layerOrder(value: string): number { const order = ["root", "api", "application", "domain", "infrastructure", "components", "services", "config", "types"]; const index = order.indexOf(value); return index < 0 ? order.length : index; }
+function simpleTypeName(value: string): string { return value.replace(/<.*>/gu, "").replace(/\[\]$/u, "").split(/[.$]/u).at(-1)?.trim() ?? value; }
+function countValues(values: readonly string[]): Map<string, number> { const result = new Map<string, number>(); for (const value of values) result.set(value, (result.get(value) ?? 0) + 1); return new Map([...result.entries()].sort(([a], [b]) => a.localeCompare(b))); }
+interface TreeNode { children: Map<string, TreeNode>; file: boolean; }
+function treeLines(paths: readonly string[]): string[] {
+  const root: TreeNode = { children: new Map(), file: false };
+  for (const path of paths) { let current = root; const parts = path.split("/").filter(Boolean); for (let index = 0; index < parts.length; index += 1) { const part = parts[index]!; let child = current.children.get(part); if (child === undefined) { child = { children: new Map(), file: false }; current.children.set(part, child); } if (index === parts.length - 1) child.file = true; current = child; } }
+  const result: string[] = [];
+  const visit = (node: TreeNode, prefix: string): void => { const entries = [...node.children.entries()].sort(([nameA, a], [nameB, b]) => Number(a.children.size === 0) - Number(b.children.size === 0) || nameA.localeCompare(nameB)); entries.forEach(([name, child], index) => { const last = index === entries.length - 1; result.push(`${prefix}${last ? "└── " : "├── "}${name}${child.children.size > 0 && !child.file ? "/" : ""}`); visit(child, `${prefix}${last ? "    " : "│   "}`); }); };
+  visit(root, ""); return result;
+}
 function asRecord(value: unknown): Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function escapeMermaid(value: string): string { return value.replace(/["\r\n<>]/gu, " ").replace(/\|/gu, "/").trim(); }
 function cell(value: string): string { return value.replaceAll("|", "\\|").replace(/[\r\n]/gu, " "); }

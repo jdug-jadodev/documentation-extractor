@@ -8,6 +8,7 @@ import { buildIncrementalInventory, buildInventory } from "./discovery/inventory
 import { PluginRegistry } from "./extractors/registry.js";
 import { buildBundle } from "./bundles.js";
 import { buildGraph } from "./correlation/graph.js";
+import { resolveSourceSemanticFacts } from "./extractors/source_architecture/index.js";
 import { stableId } from "./platform/hash.js";
 import { atomicWrite } from "./platform/fs.js";
 export async function runDeterministicScenario(input) {
@@ -90,7 +91,7 @@ export async function runDeterministicScenario(input) {
         aliases,
     };
     const graph = buildGraph(extractions.flatMap((item) => item.bundle.facts), scenario);
-    const suffix = repositoryIds.length === 1 ? repositoryIds[0] : `scenario-${stableId(repositoryIds.join("\u0000")).slice(0, 10)}`;
+    const suffix = repositoryIds.length === 1 ? repositoryIds[0] : `scenario-${stableId("repositories", repositoryIds).slice(-10)}`;
     const runId = `run-${new Date().toISOString().replace(/[:.]/gu, "-")}-${suffix}`;
     const runRoot = join(config.state_root, "runs", runId);
     await mkdir(runRoot, { recursive: true });
@@ -204,7 +205,7 @@ function mergeIncrementalBundle(snapshot, baseline, delta, inventory, invalidate
     const merged = {
         plugin_id: "incremental-merge",
         plugin_version: "1.0.0",
-        facts: [...facts, ...delta.flatMap((item) => item.facts)],
+        facts: resolveSourceSemanticFacts([...facts, ...delta.flatMap((item) => item.facts)]),
         evidence: [...evidenceMap.values(), ...delta.flatMap((item) => item.evidence)],
         diagnostics: [...diagnostics, ...delta.flatMap((item) => item.diagnostics)],
         coverage_by_capability: baseline.coverage.capabilities,

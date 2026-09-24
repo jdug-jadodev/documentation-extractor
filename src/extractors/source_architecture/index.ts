@@ -1,15 +1,19 @@
 import { posix } from "node:path";
 import type { CandidateStack, CapabilityCoverage, Diagnostic, Evidence, ExtractionOptions, ExtractionResult, ExtractorPlugin, Fact, Inventory, SnapshotEntry, SnapshotReader } from "../../contracts/types.js";
 import { compareBytes, sha256, stableId } from "../../platform/hash.js";
+import { BoundedWorkerPool } from "../../platform/worker_pool.js";
+import type { AstAnalysis, AstCall, AstSymbol, GrammarParseResult } from "../grammar.js";
 
-const SOURCE = /\.(?:[cm]?[jt]s|tsx|jsx)$/iu;
+const SOURCE = /\.(?:[cm]?[jt]s|tsx|jsx|java)$/iu;
+const DOCUMENTABLE = /(?:\.(?:[cm]?[jt]s|tsx|jsx|java|json|ya?ml|xml|properties|gradle|kts|md|sql)|(?:^|\/)(?:Dockerfile|Jenkinsfile))$/iu;
+interface GrammarWorkerInput { grammarRoot: string; language: string; source: string; }
 
 export class SourceArchitecturePlugin implements ExtractorPlugin {
   readonly id = "source-architecture";
-  readonly version = "1.1.0";
-  readonly supported_languages = ["javascript", "typescript", "tsx"] as const;
-  readonly capabilities = { modules: "implemented", symbols: "partial", imports: "implemented", manifests: "implemented" } as const;
-  readonly rule_versions = { "source.module": "1", "source.symbol": "2", "source.import": "1", "package.dependencies": "1", "package.scripts": "1", "package.runtime": "1" } as const;
+  readonly version = "2.1.0";
+  readonly supported_languages = ["javascript", "typescript", "tsx", "java"] as const;
+  readonly capabilities = { modules: "implemented", symbols: "implemented", calls: "implemented", composition: "implemented", imports: "implemented", manifests: "implemented" } as const;
+  readonly rule_versions = { "repository.file": "1", "repository.build-module": "1", "repository.build-dependency": "1", "source.module": "2", "source.symbol": "4", "source.call": "1", "source.construction": "1", "source.injection": "2", "source.binding": "1", "source.type-relation": "1", "source.import": "2", "package.dependencies": "1", "package.scripts": "1", "package.runtime": "1" } as const;
 
   async detect(inventory: Inventory): Promise<CandidateStack[]> {
     const paths = inventory.files.filter((file) => file.excluded_reason === null && SOURCE.test(file.relative_path)).map((file) => file.relative_path);
@@ -21,34 +25,157 @@ export class SourceArchitecturePlugin implements ExtractorPlugin {
     const sourcePaths = new Set(allEntries.filter((entry) => SOURCE.test(entry.relative_path)).map((entry) => entry.relative_path));
     const entries = options.include_paths === undefined ? allEntries : allEntries.filter((entry) => options.include_paths!.has(entry.relative_path));
     const facts: Fact[] = [], evidence: Evidence[] = [], diagnostics: Diagnostic[] = [];
-    const processed = { modules: 0, symbols: 0, imports: 0, manifests: 0 };
-    for (const entry of entries) {
-      if ((!SOURCE.test(entry.relative_path) && !/(^|\/)package\.json$/iu.test(entry.relative_path)) || entry.size > options.max_file_bytes) continue;
+    const processed = { modules: 0, symbols: 0, calls: 0, composition: 0, imports: 0, manifests: 0 };
+    const grammar = new BoundedWorkerPool<GrammarWorkerInput, GrammarParseResult>(new URL("../grammar_worker.js", import.meta.url), 2);
+    try { for (const entry of entries) {
+      if (!DOCUMENTABLE.test(entry.relative_path) || entry.size > options.max_file_bytes) continue;
       let source: string;
       try { source = Buffer.from(await reader.read(entry.relative_path, { maxBytes: options.max_file_bytes, ...(options.signal === undefined ? {} : { signal: options.signal }) })).toString("utf8"); }
       catch (error) { diagnostics.push(readDiagnostic(reader, entry.relative_path, error)); continue; }
+      const metadata = pathMetadata(entry.relative_path);
+      addFact(reader, component.component_id, entry, source, "repository_file", { path: entry.relative_path, kind: fileKind(entry.relative_path), ...metadata }, "repository.file", 0, Math.min(source.length, 1), facts, evidence);
       if (SOURCE.test(entry.relative_path)) {
         processed.modules += 1;
-        addFact(reader, component.component_id, entry, source, "source_module", { path: entry.relative_path, language: language(entry.relative_path), layer: layer(entry.relative_path), role: role(entry.relative_path) }, "source.module", 0, Math.min(Buffer.byteLength(source, "utf8"), 1), facts, evidence);
-        for (const descriptor of symbols(source)) {
+        addFact(reader, component.component_id, entry, source, "source_module", { path: entry.relative_path, language: language(entry.relative_path), layer: layer(entry.relative_path), role: role(entry.relative_path), ...metadata }, "source.module", 0, Math.min(source.length, 1), facts, evidence);
+        let analysis: AstAnalysis | null = null;
+        try {
+          const parsed = await grammar.run({ grammarRoot: options.grammar_root, language: language(entry.relative_path), source }, { timeoutMs: 30_000, ...(options.signal === undefined ? {} : { signal: options.signal }) });
+          analysis = parsed.analysis;
+          if (parsed.hasErrors) diagnostics.push(architectureDiagnostic(reader, entry.relative_path, "SYNTAX_PARTIAL", "El AST contiene errores; se conservaron los nodos reconocibles.", "warning"));
+        } catch (error) {
+          diagnostics.push(architectureDiagnostic(reader, entry.relative_path, "AST_UNAVAILABLE", error instanceof Error ? error.message : String(error), "warning"));
+        }
+        if (analysis !== null) {
+          const classMethods = new Map<string, string[]>();
+          for (const symbol of analysis.symbols) if (symbol.class_name !== null && symbol.symbol_type === "method") classMethods.set(symbol.class_name, [...(classMethods.get(symbol.class_name) ?? []), symbol.name]);
+          for (const symbol of analysis.symbols) {
+            processed.symbols += 1;
+            const calls = symbol.calls.map((call) => call.name);
+            const symbolId = stableId("symbol", component.component_id, entry.relative_path, symbol.class_name, symbol.name, symbol.start);
+            addFact(reader, component.component_id, entry, source, "code_symbol", {
+              symbol_id: symbolId, name: symbol.name, symbol_type: symbol.symbol_type, class_name: symbol.class_name,
+              exported: symbol.exported, visibility: symbol.visibility, static: symbol.static, async: symbol.async,
+              parameters: symbol.parameters, signature: symbol.signature, calls: [...new Set(calls)], call_details: symbol.calls,
+              start_line: symbol.start_line, end_line: symbol.end_line, snippet: symbol.snippet,
+              description: describeSymbol(symbol.symbol_type, symbol.name, symbol.symbol_type === "class" ? classMethods.get(symbol.name) ?? [] : calls),
+              description_basis: "AST, firma y llamadas observadas", source_path: entry.relative_path, layer: layer(entry.relative_path), role: role(entry.relative_path), ...metadata
+            }, "source.symbol", symbol.start, symbol.end, facts, evidence);
+            for (const call of symbol.calls) {
+              processed.calls += 1;
+              addFact(reader, component.component_id, entry, source, "symbol_call", callValue(symbol, symbolId, call, entry.relative_path), "source.call", call.start, call.end, facts, evidence);
+            }
+          }
+          for (const construction of analysis.constructions) {
+            processed.composition += 1;
+            addFact(reader, component.component_id, entry, source, "object_construction", { ...construction, source_path: entry.relative_path }, "source.construction", construction.start, construction.end, facts, evidence);
+          }
+          for (const injection of analysis.injections.filter((item) => item.dependency_type !== null && isArchitecturalType(item.dependency_type))) {
+            processed.composition += 1;
+            addFact(reader, component.component_id, entry, source, "dependency_injection", { ...injection, source_path: entry.relative_path }, "source.injection", injection.start, injection.end, facts, evidence);
+          }
+        } else for (const descriptor of symbols(source)) {
           processed.symbols += 1;
-          addFact(reader, component.component_id, entry, source, "code_symbol", { ...descriptor.value, source_path: entry.relative_path, layer: layer(entry.relative_path), role: role(entry.relative_path) }, "source.symbol", descriptor.index, descriptor.index + descriptor.text.length, facts, evidence);
+          addFact(reader, component.component_id, entry, source, "code_symbol", { ...descriptor.value, symbol_id: stableId("symbol", component.component_id, entry.relative_path, descriptor.value.class_name ?? null, descriptor.value.name, descriptor.index), source_path: entry.relative_path, layer: layer(entry.relative_path), role: role(entry.relative_path), extraction_mode: "fallback" }, "source.symbol", descriptor.index, descriptor.index + descriptor.text.length, facts, evidence);
         }
         for (const descriptor of imports(source, entry.relative_path, sourcePaths)) {
           processed.imports += 1;
           addFact(reader, component.component_id, entry, source, "module_dependency", descriptor.value, "source.import", descriptor.index, descriptor.index + descriptor.text.length, facts, evidence);
         }
+        for (const descriptor of implicitJavaInjections(source)) {
+          processed.composition += 1;
+          addFact(reader, component.component_id, entry, source, "dependency_injection", { ...descriptor.value, source_path: entry.relative_path }, "source.injection", descriptor.index, descriptor.index + descriptor.text.length, facts, evidence);
+        }
+        for (const descriptor of javaTypeRelations(source)) addFact(reader, component.component_id, entry, source, "type_relation", { ...descriptor.value, source_path: entry.relative_path }, "source.type-relation", descriptor.index, descriptor.index + descriptor.text.length, facts, evidence);
       } else {
         processed.manifests += 1;
-        extractPackageJson(reader, component.component_id, entry, source, facts, evidence, diagnostics);
+        if (/(^|\/)package\.json$/iu.test(entry.relative_path)) extractPackageJson(reader, component.component_id, entry, source, facts, evidence, diagnostics);
+        if (/(^|\/)(?:build|settings)\.gradle(?:\.kts)?$/iu.test(entry.relative_path)) extractGradleModules(reader, component.component_id, entry, source, facts, evidence);
       }
-    }
-    const coverage_by_capability: CapabilityCoverage[] = Object.entries(this.capabilities).map(([capability, status]) => ({ capability, status, processed: processed[capability as keyof typeof processed], failed: 0, limitations: status === "partial" ? ["Las declaraciones din\u00e1micas o generadas pueden requerir interpretaci\u00f3n adicional."] : [] }));
-    return { plugin_id: this.id, plugin_version: this.version, facts: unique(facts), evidence: unique(evidence), diagnostics, coverage_by_capability, dependencies: entries.filter((entry) => SOURCE.test(entry.relative_path) || /(^|\/)package\.json$/iu.test(entry.relative_path)).map((entry) => entry.relative_path) };
+    } } finally { await grammar.close(); }
+    const resolvedFacts = resolveSourceSemanticFacts(facts);
+    const coverage_by_capability: CapabilityCoverage[] = Object.entries(this.capabilities).map(([capability, status]) => ({ capability, status, processed: processed[capability as keyof typeof processed], failed: 0, limitations: [] }));
+    return { plugin_id: this.id, plugin_version: this.version, facts: unique(resolvedFacts), evidence: unique(evidence), diagnostics, coverage_by_capability, dependencies: entries.filter((entry) => DOCUMENTABLE.test(entry.relative_path)).map((entry) => entry.relative_path) };
   }
 }
 
 export function createSourceArchitecturePlugin(): ExtractorPlugin { return new SourceArchitecturePlugin(); }
+
+function callValue(symbol: AstSymbol, symbolId: string, call: AstCall, sourcePath: string): Record<string, unknown> {
+  return {
+    caller_symbol_id: symbolId,
+    caller_name: symbol.name,
+    caller_class: symbol.class_name,
+    callee_name: call.name,
+    receiver: call.receiver,
+    expression: call.expression,
+    target_symbol_id: null,
+    target_class: null,
+    target_path: null,
+    resolution: "unresolved",
+    source_path: sourcePath
+  };
+}
+
+export function resolveSourceSemanticFacts(facts: readonly Fact[]): Fact[] {
+  const withoutDerivedBindings = facts.filter((fact) => fact.kind !== "dependency_binding");
+  const components = [...new Set(withoutDerivedBindings.map((fact) => fact.component_id))];
+  return components.flatMap((componentId) => resolveSemanticFacts(componentId, withoutDerivedBindings.filter((fact) => fact.component_id === componentId)));
+}
+
+function resolveSemanticFacts(componentId: string, facts: readonly Fact[]): Fact[] {
+  const symbols = facts.filter((fact) => fact.kind === "code_symbol").map((fact) => ({ fact, value: asRecord(fact.value) }));
+  const byId = new Map(symbols.map((item) => [String(item.value.symbol_id ?? ""), item]));
+  const byClassMethod = new Map<string, typeof symbols>();
+  const byName = new Map<string, typeof symbols>();
+  for (const item of symbols) {
+    const name = String(item.value.name ?? ""), className = nullableString(item.value.class_name);
+    byName.set(name, [...(byName.get(name) ?? []), item]);
+    if (className !== null) byClassMethod.set(`${className}\0${name}`, [...(byClassMethod.get(`${className}\0${name}`) ?? []), item]);
+  }
+  const injections = facts.filter((fact) => fact.kind === "dependency_injection").map((fact) => asRecord(fact.value));
+  const constructions = facts.filter((fact) => fact.kind === "object_construction").map((fact) => asRecord(fact.value));
+  const variableTypes = new Map<string, string>();
+  for (const value of constructions) if (typeof value.variable === "string") variableTypes.set(normalizeReceiver(value.variable), String(value.constructed_type ?? "unknown"));
+  const injectionTypes = new Map<string, string>();
+  for (const value of injections) if (typeof value.class_name === "string" && typeof value.parameter === "string" && typeof value.dependency_type === "string") injectionTypes.set(`${value.class_name}\0${value.parameter}`, simpleType(value.dependency_type));
+
+  const result = facts.map((fact) => {
+    if (fact.kind !== "symbol_call") return fact;
+    const value = asRecord(fact.value), caller = byId.get(String(value.caller_symbol_id ?? "")), receiver = nullableString(value.receiver), callee = String(value.callee_name ?? "");
+    const callerClass = nullableString(caller?.value.class_name ?? value.caller_class);
+    let targetClass: string | null = null;
+    if (receiver === "this" || receiver === "super") targetClass = callerClass;
+    else if (receiver?.startsWith("this.") === true && callerClass !== null) targetClass = injectionTypes.get(`${callerClass}\0${receiver.slice(5).split(".")[0]}`) ?? null;
+    else if (receiver !== null) targetClass = variableTypes.get(normalizeReceiver(receiver)) ?? (callerClass === null ? undefined : injectionTypes.get(`${callerClass}\0${normalizeReceiver(receiver).split(".")[0]}`)) ?? (byClassMethod.has(`${simpleType(receiver)}\0${callee}`) ? simpleType(receiver) : null);
+    let candidates = targetClass === null ? [] : byClassMethod.get(`${targetClass}\0${callee}`) ?? [];
+    if (candidates.length === 0 && callerClass !== null) candidates = byClassMethod.get(`${callerClass}\0${callee}`) ?? [];
+    if (candidates.length === 0) candidates = byName.get(callee) ?? [];
+    const target = candidates.length === 1 ? candidates[0] : undefined;
+    const resolution = target !== undefined ? "supported" : candidates.length > 1 ? "candidate" : "unresolved";
+    const resolvedValue = { ...value, target_symbol_id: target?.value.symbol_id ?? null, target_class: target?.value.class_name ?? targetClass, target_path: target?.value.source_path ?? null, resolution };
+    return { ...fact, id: stableId("fact", componentId, fact.kind, resolvedValue, fact.evidence_ids[0] ?? ""), value: resolvedValue };
+  });
+
+  for (const construction of constructions) {
+    const className = simpleType(String(construction.constructed_type ?? ""));
+    const args = Array.isArray(construction.arguments) ? construction.arguments.map(String) : [];
+    const classInjections = injections.filter((item) => item.class_name === className);
+    for (let index = 0; index < Math.min(args.length, classInjections.length); index += 1) {
+      const injection = classInjections[index]!, argument = normalizeReceiver(args[index]!);
+      const implementation = variableTypes.get(argument) ?? simpleType(args[index]!);
+      const value = { consumer_class: className, injection_point: injection.parameter, declared_type: injection.dependency_type ?? null, implementation_type: implementation || null, argument: args[index], source_path: construction.source_path, resolution: variableTypes.has(argument) ? "supported" : "candidate" };
+      const evidenceIds = facts.find((fact) => fact.kind === "object_construction" && asRecord(fact.value).start === construction.start)?.evidence_ids ?? [];
+      result.push({ schema_version: 3, id: stableId("fact", componentId, "dependency_binding", value, evidenceIds), kind: "dependency_binding", component_id: componentId, value, evidence_ids: evidenceIds, rule_id: "source.binding" });
+    }
+  }
+  return result;
+}
+
+function nullableString(value: unknown): string | null { return typeof value === "string" && value.trim() !== "" ? value : null; }
+function normalizeReceiver(value: string): string { return value.replace(/^this\./u, "").replace(/\?\./gu, ".").trim(); }
+function simpleType(value: string): string { return value.replace(/<.*>/gu, "").replace(/\[\]$/u, "").split(/[.$]/u).at(-1)?.trim() ?? value; }
+function asRecord(value: unknown): Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function architectureDiagnostic(reader: SnapshotReader, path: string, code: string, message: string, severity: Diagnostic["severity"]): Diagnostic { return { schema_version: 3, id: stableId("diagnostic", reader.snapshot.id, path, code), severity, code, scope: path, message, evidence_ids: [], suggested_action: "Revise solo el archivo indicado; los demás símbolos AST se conservan." }; }
 
 function symbols(source: string): Array<{ index: number; text: string; value: Record<string, unknown> }> {
   const patterns: Array<[string, RegExp]> = [
@@ -150,12 +277,24 @@ function describeSymbol(kind: string, name: string, calls: readonly string[]): s
 }
 
 function imports(source: string, sourcePath: string, paths: ReadonlySet<string>): Array<{ index: number; text: string; value: Record<string, unknown> }> {
+  if (/\.java$/iu.test(sourcePath)) {
+    return [...source.matchAll(/\bimport\s+(?:static\s+)?([A-Za-z_$][\w$]*(?:\.[A-Za-z_$*][\w$]*)+)\s*;/gu)].map((match) => {
+      const specifier = match[1] ?? "", simpleName = specifier.split(".").at(-1) ?? specifier;
+      const targetPath = resolveJavaModule(specifier, paths);
+      return { index: match.index ?? 0, text: match[0], value: { source_path: sourcePath, specifier, target_path: targetPath, external: targetPath === null, imports: simpleName === "*" ? [] : [simpleName] } };
+    });
+  }
   const pattern = /\bimport\s+(?!\()([\s\S]{1,300}?)\s+from\s+["']([^"']+)["']|\bimport\s+["']([^"']+)["']/gu;
   return [...source.matchAll(pattern)].map((match) => {
     const specifier = match[2] ?? match[3] ?? "";
     const clause = match[1]?.trim() ?? "side-effect";
     return { index: match.index ?? 0, text: match[0], value: { source_path: sourcePath, specifier, target_path: specifier.startsWith(".") ? resolveModule(sourcePath, specifier, paths) : null, external: !specifier.startsWith("."), imports: importedNames(clause) } };
   });
+}
+
+function resolveJavaModule(specifier: string, paths: ReadonlySet<string>): string | null {
+  const suffix = `${specifier.replaceAll(".", "/")}.java`;
+  return [...paths].find((path) => path.endsWith(suffix)) ?? null;
 }
 
 function importedNames(clause: string): string[] {
@@ -195,6 +334,19 @@ function extractPackageJson(reader: SnapshotReader, componentId: string, entry: 
   for (const value of runtimeValues) addFact(reader, componentId, entry, source, "technology", { ...value, source_path: entry.relative_path }, "package.runtime", 0, 1, facts, evidence);
 }
 
+function extractGradleModules(reader: SnapshotReader, componentId: string, entry: SnapshotEntry, source: string, facts: Fact[], evidence: Evidence[]): void {
+  const owner = posix.dirname(entry.relative_path) || ".";
+  addFact(reader, componentId, entry, source, "build_module", { module: owner, manifest: entry.relative_path }, "repository.build-module", 0, Math.min(source.length, 1), facts, evidence);
+  for (const match of source.matchAll(/\bproject\s*\(\s*["'](:[^"']+)["']\s*\)/gu)) {
+    const target = (match[1] ?? "").replace(/^:/u, "").replaceAll(":", "/");
+    addFact(reader, componentId, entry, source, "build_module_dependency", { source_module: owner, target_module: target, declaration: match[0], source_path: entry.relative_path }, "repository.build-dependency", match.index ?? 0, (match.index ?? 0) + match[0].length, facts, evidence);
+  }
+  if (/settings\.gradle/u.test(entry.relative_path)) for (const match of source.matchAll(/\binclude\s*\(?\s*([^\r\n)]+)/gu)) for (const literal of (match[1] ?? "").matchAll(/["'](:[^"']+)["']/gu)) {
+    const target = (literal[1] ?? "").replace(/^:/u, "").replaceAll(":", "/");
+    addFact(reader, componentId, entry, source, "build_module", { module: target, declared_by: entry.relative_path }, "repository.build-module", match.index ?? 0, (match.index ?? 0) + match[0].length, facts, evidence);
+  }
+}
+
 function addFact(reader: SnapshotReader, componentId: string, entry: SnapshotEntry, source: string, kind: string, value: Record<string, unknown>, ruleId: string, characterStart: number, characterEnd: number, facts: Fact[], evidence: Evidence[]): void {
   const start = Buffer.byteLength(source.slice(0, characterStart), "utf8"), end = Buffer.byteLength(source.slice(0, characterEnd), "utf8");
   const evidenceId = stableId("evidence", reader.snapshot.id, entry.relative_path, start, end, ruleId);
@@ -202,8 +354,57 @@ function addFact(reader: SnapshotReader, componentId: string, entry: SnapshotEnt
   facts.push({ schema_version: 3, id: stableId("fact", componentId, kind, value, evidenceId), kind, component_id: componentId, value, evidence_ids: [evidenceId], rule_id: ruleId });
 }
 
-function layer(path: string): string { return path.split("/").find((segment) => ["application", "domain", "infrastructure", "api", "components", "hooks", "navigation", "screens", "services", "store", "tasks", "utils", "workers", "config", "types"].includes(segment)) ?? "root"; }
-function role(path: string): string { const normalized = path.toLocaleLowerCase("en-US"); for (const candidate of ["controller", "usecase", "repository", "adapter", "middleware", "validator", "mapper", "dto", "entity", "port", "routes", "service", "services", "util", "utils", "hook", "hooks", "component", "components", "screen", "screens", "navigation", "store", "task", "tasks", "worker", "workers", "config", "types"]) if (normalized.split("/").includes(candidate)) return candidate.replace(/s$/u, ""); return "module"; }
-function language(path: string): string { if (/\.tsx$/iu.test(path)) return "tsx"; if (/\.[cm]?ts$/iu.test(path)) return "typescript"; return "javascript"; }
+function pathMetadata(path: string): Record<string, unknown> {
+  const segments = path.split("/");
+  const sourceRoot = segments.findIndex((segment, index) => segment === "src" && ["main", "test"].includes(segments[index + 1] ?? ""));
+  const sourceSet = sourceRoot >= 0 ? segments[sourceRoot + 1] ?? "unknown" : /(^|\/)(?:test|tests|spec|specs)(\/|$)/iu.test(path) ? "test" : "root";
+  const buildModule = sourceRoot > 0 ? segments.slice(0, sourceRoot).join("/") : ".";
+  const javaIndex = segments.findIndex((segment, index) => segment === "java" && index > sourceRoot);
+  const packageName = javaIndex >= 0 && segments.length > javaIndex + 2 ? segments.slice(javaIndex + 1, -1).join(".") : null;
+  const portIndex = segments.findIndex((segment) => segment.toLocaleLowerCase("en-US") === "port");
+  const portDirection = portIndex >= 0 && ["in", "out"].includes(segments[portIndex + 1] ?? "") ? segments[portIndex + 1] : null;
+  return { source_set: sourceSet, build_module: buildModule, package: packageName, port_direction: portDirection };
+}
+
+function fileKind(path: string): string {
+  if (SOURCE.test(path)) return "source";
+  if (/(^|\/)(?:pom\.xml|package\.json|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?)$/iu.test(path)) return "manifest";
+  if (/(^|\/)src\/(?:main|test)\/resources\//iu.test(path)) return "resource";
+  if (/\.(?:md|adoc|rst)$/iu.test(path)) return "documentation";
+  return "configuration";
+}
+
+function isArchitecturalType(value: string): boolean {
+  const type = simpleType(value).replace(/[?&]/gu, "");
+  return type !== "" && !/^(?:byte|short|int|long|float|double|boolean|char|void|String|Integer|Long|Double|Float|Boolean|Character|BigDecimal|BigInteger|UUID|URI|URL|Date|Instant|LocalDate|LocalDateTime|OffsetDateTime|ZonedDateTime|Object|Class|List|Set|Map|Collection|Optional|Mono|Flux)$/u.test(type);
+}
+
+function implicitJavaInjections(source: string): Array<{ index: number; text: string; value: Record<string, unknown> }> {
+  if (!/@RequiredArgsConstructor\b/u.test(source)) return [];
+  const className = /\b(?:class|record)\s+([A-Za-z_$][\w$]*)/u.exec(source)?.[1] ?? null;
+  if (className === null) return [];
+  const result: Array<{ index: number; text: string; value: Record<string, unknown> }> = [];
+  for (const match of source.matchAll(/\bprivate\s+final\s+([A-Za-z_$][\w$]*(?:\s*<[^;=]+>)?(?:\[\])?)\s+([A-Za-z_$][\w$]*)\s*;/gu)) {
+    const dependencyType = match[1]?.replace(/\s+/gu, " ").trim() ?? "";
+    if (!isArchitecturalType(dependencyType)) continue;
+    result.push({ index: match.index ?? 0, text: match[0], value: { class_name: className, parameter: match[2] ?? "unknown", dependency_type: dependencyType, injection_style: "lombok-required-args-constructor", start: match.index ?? 0, end: (match.index ?? 0) + match[0].length } });
+  }
+  return result;
+}
+
+function javaTypeRelations(source: string): Array<{ index: number; text: string; value: Record<string, unknown> }> {
+  const result: Array<{ index: number; text: string; value: Record<string, unknown> }> = [];
+  const pattern = /\b(class|interface|record)\s+([A-Za-z_$][\w$]*)(?:\s+extends\s+([^\{]+?))?(?:\s+implements\s+([^\{]+?))?\s*\{/gu;
+  for (const match of source.matchAll(pattern)) {
+    const sourceType = match[2] ?? "unknown";
+    for (const target of String(match[3] ?? "").split(",").map((value) => simpleType(value.trim())).filter(Boolean)) result.push({ index: match.index ?? 0, text: match[0], value: { source_type: sourceType, target_type: target, relation: match[1] === "interface" ? "extends" : "inherits" } });
+    for (const target of String(match[4] ?? "").split(",").map((value) => simpleType(value.trim())).filter(Boolean)) result.push({ index: match.index ?? 0, text: match[0], value: { source_type: sourceType, target_type: target, relation: "implements" } });
+  }
+  return result;
+}
+
+function layer(path: string): string { return path.split("/").find((segment) => ["application", "domain", "infrastructure", "infraestructure", "api", "components", "hooks", "navigation", "screens", "services", "store", "tasks", "utils", "workers", "config", "types"].includes(segment.toLocaleLowerCase("en-US")))?.replace("infraestructure", "infrastructure") ?? "root"; }
+function role(path: string): string { const normalized = path.toLocaleLowerCase("en-US"); const segments = normalized.split("/"); const portIndex = segments.indexOf("port"); if (portIndex >= 0 && ["in", "out"].includes(segments[portIndex + 1] ?? "")) return `port-${segments[portIndex + 1]}`; for (const candidate of ["controller", "handler", "router", "route", "entry-point", "entrypoint", "usecase", "repository", "gateway", "adapter", "middleware", "validator", "mapper", "dto", "entity", "port", "routes", "service", "services", "util", "utils", "hook", "hooks", "component", "components", "screen", "screens", "navigation", "store", "task", "tasks", "worker", "workers", "config", "types"]) if (segments.includes(candidate)) return candidate.replace(/s$/u, ""); return "module"; }
+function language(path: string): string { if (/\.java$/iu.test(path)) return "java"; if (/\.tsx$/iu.test(path)) return "tsx"; if (/\.[cm]?ts$/iu.test(path)) return "typescript"; return "javascript"; }
 function readDiagnostic(reader: SnapshotReader, path: string, error: unknown): Diagnostic { return { schema_version: 3, id: stableId("diagnostic", reader.snapshot.id, path, "ARCHITECTURE_READ_FAILED"), severity: "error", code: "ARCHITECTURE_READ_FAILED", scope: path, message: error instanceof Error ? error.message : String(error), evidence_ids: [], suggested_action: "Revise el archivo; el resto de la arquitectura se conserva." }; }
 function unique<T extends { id: string }>(items: T[]): T[] { return [...new Map(items.map((item) => [item.id, item])).values()].sort((a, b) => compareBytes(a.id, b.id)); }

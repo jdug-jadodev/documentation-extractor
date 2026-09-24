@@ -4,7 +4,8 @@ import * as z from "zod/v4";
 import { ContractValidator } from "./contracts/validator.js";
 import { configurationState, loadConfiguration } from "./config.js";
 import { runDeterministicScenario } from "./engine.js";
-import { explainRelations, loadRunArtifacts, prepareAndPublishDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
+import { explainRelations, loadRunArtifacts, loadWorkspaceArtifacts, prepareAndPublishDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
+import { explainEndpointFromFacts, explainServiceFromFacts } from "./documentation/semantic.js";
 import { stageProposalDraft } from "./publication/draft.js";
 import { refreshKnowledge } from "./refresh.js";
 export async function buildDocumentationMcp(options) {
@@ -71,6 +72,22 @@ export async function buildDocumentationMcp(options) {
         const config = await loadConfiguration(options.configPath, validator);
         const artifacts = await loadRunArtifacts(config, run_id);
         return { schema_version: 3, run_id, ...queryRunArtifacts(artifacts, category, { ...(component === undefined ? {} : { repositoryId: component, componentId: component }), ...(offset === undefined ? {} : { offset }), ...(limit === undefined ? {} : { limit }) }) };
+    }));
+    server.registerTool("docsys_explain_service", {
+        description: "Devuelve una explicación compacta y precalculada de un servicio: tecnologías, endpoints, relaciones, clases y métodos. No reanaliza código ni envía cientos de hechos a Copilot.",
+        inputSchema: z.object({ run_id: z.string().min(1), component: z.string().min(1), symbol_limit: z.number().int().min(1).max(200).optional() }),
+    }, async ({ run_id, component, symbol_limit }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        const artifacts = await loadWorkspaceArtifacts(config, run_id);
+        return explainServiceFromFacts(run_id, component, artifacts.facts, artifacts.graph, symbol_limit ?? 80);
+    }));
+    server.registerTool("docsys_explain_endpoint", {
+        description: "Explica un endpoint desde su flujo AST precalculado: handler, clases, métodos, llamadas, datos e integraciones. No vuelve a leer ni analizar el repositorio.",
+        inputSchema: z.object({ run_id: z.string().min(1), component: z.string().min(1), method: z.string().min(1), path: z.string().min(1) }),
+    }, async ({ run_id, component, method, path }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        const artifacts = await loadWorkspaceArtifacts(config, run_id);
+        return explainEndpointFromFacts(run_id, component, method, path, artifacts.facts);
     }));
     server.registerTool("docsys_prepare_proposal", {
         description: "Prepara un borrador determinista de especificación, migración o ADR basado en un run. Siempre queda pendiente de revisión; no modifica aplicaciones.",

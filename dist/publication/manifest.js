@@ -2,7 +2,7 @@ import { readdir, readFile, lstat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { sha256, compareBytes } from "../platform/hash.js";
 import { assertPortableRelativePath } from "../platform/paths.js";
-export const PUBLICATION_ALLOWLIST = /^(?:Inicio\.md|Servicios\/.*\.(?:md|json)|Mapas\/.*\.md|Flujos\/.*\.md|Decisiones\/.*\.md|Especificaciones\/.*\.md|edicion\.json)$/iu;
+export const PUBLICATION_ALLOWLIST = /^(?:Inicio\.md|fuentes-conocimiento\.json|Servicios\/.*\.(?:md|json)|Mapas\/.*\.md|Flujos\/.*\.md|Decisiones\/.*\.md|Especificaciones\/.*\.md|edicion\.json)$/iu;
 export async function createPublicationManifest(input) {
     const paths = await listFiles(input.root);
     const files = [];

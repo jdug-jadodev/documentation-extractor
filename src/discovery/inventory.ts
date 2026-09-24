@@ -70,7 +70,7 @@ async function buildInventoryInternal(reader: SnapshotReader, previous: Inventor
 
 function technologySignalsFromInventory(inventory: Inventory): Set<string> {
   const result = new Set<string>();
-  const mapping: Record<string, string> = { dotnet: "dotnet", "java-spring": "spring", "java-weblogic": "jee", "js-angular": "angular", "js-react": "react", "node-express": "express" };
+  const mapping: Record<string, string> = { dotnet: "dotnet", "java-spring": "spring", "java-webflux": "webflux", "java-weblogic": "jee", "js-angular": "angular", "js-react": "react", "node-express": "express" };
   for (const candidate of inventory.candidate_stacks) {
     const signal = mapping[candidate.plugin_id];
     if (signal !== undefined) result.add(signal);
@@ -101,7 +101,7 @@ function classify(path: string): InventoryFile["classification"] {
 function inferTechnologies(path: string, signals: ReadonlySet<string>): string[] {
   const name = basename(path).toLocaleLowerCase("en-US");
   if (name === "package.json") return ["nodejs", ...(signals.has("angular") ? ["angular"] : []), ...(signals.has("react") ? ["react"] : []), ...(signals.has("express") ? ["express"] : [])];
-  if (name === "pom.xml" || name.startsWith("build.gradle")) return ["java", ...(signals.has("spring") ? ["spring"] : [])];
+  if (name === "pom.xml" || name.startsWith("build.gradle")) return ["java", ...(signals.has("spring") ? ["spring"] : []), ...(signals.has("webflux") ? ["webflux"] : [])];
   if (name === "pyproject.toml" || name === "requirements.txt") return ["python"];
   if (name.endsWith(".csproj")) return ["dotnet"];
   if (["web.xml", "weblogic.xml", "application.xml"].includes(name)) return ["java-jee"];
@@ -115,6 +115,7 @@ function detectCandidateStacks(repositoryId: string, files: InventoryFile[], sig
     ["python", ["python"], byLanguage.has("python")],
     ["dotnet", ["c_sharp", "xml"], signals.has("dotnet")],
     ["java-spring", ["java"], signals.has("spring")],
+    ["java-webflux", ["java"], signals.has("webflux")],
     ["java-weblogic", ["java", "xml"], signals.has("jee")],
     ["js-angular", ["typescript"], signals.has("angular")],
     ["js-react", ["typescript", "tsx", "javascript"], signals.has("react")],
@@ -140,5 +141,6 @@ function collectTechnologySignals(path: string, source: string, signals: Set<str
   if (/["'](?:react|react-dom)["']/u.test(sample) || /\bfrom\s+["']react["']/u.test(sample)) signals.add("react");
   if ((name === "package.json" && /["']express["']\s*:/u.test(sample)) || /\bfrom\s+["']express["']|\brequire\s*\(\s*["']express["']/u.test(sample)) signals.add("express");
   if (/\borg\.springframework\b|\bspring-boot\b/u.test(sample)) signals.add("spring");
+  if (/\bspring-boot-starter-webflux\b|\bRouterFunction\s*<|\bRouterFunctions\.(?:route|nest)\s*\(|\bServerRequest\b|\bServerResponse\b/u.test(source.slice(0, 512 * 1024))) signals.add("webflux");
   if (["web.xml", "weblogic.xml", "application.xml"].includes(name) || /\b(?:jakarta|javax)\.(?:ws\.rs|ejb|jms)\b/u.test(sample)) signals.add("jee");
 }

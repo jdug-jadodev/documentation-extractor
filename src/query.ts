@@ -2,7 +2,7 @@ import type { Fact } from "./contracts/types.js";
 
 export type QueryCategory = "endpoints" | "dependencies" | "messages" | "data" | "architecture" | "technologies" | "coverage" | "evidence";
 const KINDS: Record<Exclude<QueryCategory, "coverage" | "evidence">, string[]> = {
-  endpoints: ["http_endpoint", "http_endpoint_fragment", "http_route_mount"], dependencies: ["package_dependency", "http_client_base", "http_client_call", "module_dependency"], messages: ["message_producer", "message_consumer", "message_resource"], data: ["data_entity", "data_read", "data_write", "data_resource"], architecture: ["source_module", "code_symbol", "module_dependency", "ui_component", "ui_route"], technologies: ["technology", "package_dependency", "build_script"]
+  endpoints: ["http_endpoint", "http_endpoint_fragment", "http_route_mount"], dependencies: ["package_dependency", "http_client_base", "http_client_call", "module_dependency"], messages: ["message_producer", "message_consumer", "message_resource"], data: ["data_entity", "data_read", "data_write", "data_resource"], architecture: ["source_module", "code_symbol", "symbol_call", "object_construction", "dependency_injection", "dependency_binding", "module_dependency", "ui_component", "ui_route"], technologies: ["technology", "package_dependency", "build_script"]
 };
 
 export function queryFacts(facts: readonly Fact[], category: QueryCategory, options: { componentId?: string; offset?: number; limit?: number } = {}): { total: number; offset: number; limit: number; items: Fact[]; complete: boolean } {

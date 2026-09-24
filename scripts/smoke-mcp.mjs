@@ -52,13 +52,13 @@ async function main() {
     const status = await request("tools/call", { name: "docsys_status", arguments: {} });
     const repositories = await request("tools/call", { name: "docsys_list_repositories", arguments: {} });
     const names = listed.tools.map((tool) => tool.name).sort();
-    const required = ["docsys_explain_relation", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_refresh_knowledge", "docsys_status", "docsys_trace_flow"].sort();
+    const required = ["docsys_explain_endpoint", "docsys_explain_relation", "docsys_explain_service", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_refresh_knowledge", "docsys_status", "docsys_trace_flow"].sort();
     if (JSON.stringify(names) !== JSON.stringify(required)) throw new Error(`Superficie MCP inesperada: ${names.join(", ")}`);
     if (status.isError || repositories.isError) throw new Error("Las consultas MCP de solo lectura devolvieron error.");
     const statusValue = status.structuredContent;
     const repositoryValue = repositories.structuredContent;
     if (statusValue?.configuration !== "configured") throw new Error(`Estado inesperado: ${statusValue?.configuration ?? "ausente"}`);
-    if (!Array.isArray(repositoryValue?.repositories) || repositoryValue.repositories.length !== 3) throw new Error("MCP no devolvió los tres repositorios configurados.");
+    if (!Array.isArray(repositoryValue?.repositories) || repositoryValue.repositories.length === 0) throw new Error("MCP no devolvió repositorios configurados.");
     let analysisSummary = { analysis_executed: false };
     if (process.argv.includes("--analyze")) {
       const analysis = await request("tools/call", { name: "docsys_prepare_analysis", arguments: { repositories: repositoryValue.repositories.map((repo) => repo.id) } }, 120_000);

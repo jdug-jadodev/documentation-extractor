@@ -65,7 +65,7 @@ function factualSection(id, facts, graph, snapshots) {
     if (id === "responsabilidades") {
         const symbols = facts.get("code_symbol") ?? [];
         base.tables.push({ headers: ["Rol interno", "Cantidad", "Elementos observados"], rows: groupSymbolsByRole(symbols) });
-        base.tables.push({ headers: ["Rol", "Clase", "Método o símbolo", "Tipo", "Firma", "Qué hace", "Archivo", "Evidencia"], rows: symbols.map((fact) => { const value = record(fact.value); return [stringify(value.role), stringify(value.class_name), stringify(value.name), stringify(value.symbol_type), stringify(value.signature), symbolDescription(value), stringify(value.source_path), fact.evidence_ids.join(", ")]; }) });
+        base.tables.push({ headers: ["Rol", "Clase", "Método o símbolo", "Tipo", "Firma", "Qué hace", "Archivo", "Evidencia"], rows: symbols.map((fact) => { const value = record(fact.value); return [stringify(value.role), symbolOwner(value), stringify(value.name), stringify(value.symbol_type), stringify(value.signature), symbolDescription(value), stringify(value.source_path), fact.evidence_ids.join(", ")]; }) });
         base.limitations.push("Las descripciones indican su base de inferencia. Una descripción derivada del nombre, firma o llamadas estáticas no demuestra el comportamiento en ejecución.");
     }
     if (id === "datos")
@@ -117,6 +117,9 @@ function symbolDescription(value) {
     const owner = typeof value.class_name === "string" ? ` de ${value.class_name}` : "";
     return `${stringify(value.symbol_type)} ${stringify(value.name)}${owner}. No se extrajo una descripción más específica.`;
 }
+function symbolOwner(value) { if (typeof value.class_name === "string" && value.class_name !== "")
+    return value.class_name; if (["class", "interface", "enum", "record"].includes(String(value.symbol_type)))
+    return String(value.name); return "Función independiente / no aplica"; }
 export function resolveEndpointFacts(allFacts) { return resolvedEndpoints(groupFacts([...allFacts])); }
 function resolvedEndpoints(facts) {
     const endpoints = [...(facts.get("http_endpoint") ?? []), ...(facts.get("http_endpoint_fragment") ?? [])];

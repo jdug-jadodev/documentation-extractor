@@ -13,6 +13,7 @@ Las pruebas del motor y del servidor MCP ya fueron autorizadas. La demo, Copilot
 
 1. Mantener el motor descargado en una carpeta propia; no agregarlo al workspace de aplicaciones.
 2. Ejecutar `pnpm workspace:install -- --workspace <archivo.code-workspace> --vault <bóveda> --repository-ids <ids> --branch main`.
+   Para actualizar únicamente `.github` y MCP en un workspace existente, usar `pnpm workspace:install -- --workspace <archivo.code-workspace> --integration-only --force`; este modo conserva `knowledge.yaml`.
 3. Confirmar individualmente repositorios y ramas; ninguno se habilita por herencia.
 4. Elegir una bóveda Obsidian fuera de repositorios y del motor.
 5. Configurar Copilot solo si se desea; la extracción determinista no lo necesita.
@@ -30,4 +31,4 @@ Las pruebas del motor y del servidor MCP ya fueron autorizadas. La demo, Copilot
 
 ## Estado de pruebas
 
-La suite disponible pasa 45/45. El transporte MCP, sus nueve herramientas, un run real de tres repositorios, la extracción arquitectónica, la sincronización incremental sobre Git sintético, los Mermaid por servicio/flujo y una publicación automática verificada en Obsidian fueron comprobados en Windows. Siguen pendientes la aceptación exhaustiva P01–P112/N01–N16, los especialistas instrumentados, Archify externo, Linux/macOS y, solo si se activa expresamente, Azure.
+La suite disponible pasa 52/52. El transporte MCP y sus once herramientas, AST TypeScript/Java, Spring anotado, WebFlux funcional, Reactor, resolución de llamadas e inyección, árbol físico, sincronización incremental sobre Git sintético y Mermaid vertical fueron comprobados en Windows. Sigue pendiente la aceptación exhaustiva P01–P112/N01–N16, especialistas instrumentados, Archify externo, Linux/macOS y, solo si se activa expresamente, Azure.

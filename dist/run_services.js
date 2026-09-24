@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { compareFacts } from "./compare.js";
 import { createProposal } from "./proposal/model.js";
@@ -13,8 +13,11 @@ import { loadArchifySkill } from "./documentation/skill.js";
 import { createAutomaticPublicationReceipt } from "./review/approval.js";
 import { LocalPublicationTarget } from "./publication/local.js";
 import { createPublicationManifest } from "./publication/manifest.js";
+import { buildGraph } from "./correlation/graph.js";
+import { redactValue } from "./security/redaction.js";
 export async function prepareRunDocumentation(packageRoot, config, runId) {
-    const artifacts = await loadRunArtifacts(config, runId);
+    const requestedArtifacts = await loadRunArtifacts(config, runId);
+    const { artifacts, catalog } = await composeWorkspaceArtifacts(config, requestedArtifacts);
     const skill = await loadArchifySkill(packageRoot);
     const model = createDocumentModel({ runId, title: `Arquitectura y documentación ${runId}`, snapshots: artifacts.snapshots, facts: artifacts.facts, graph: artifacts.graph, archifyAvailable: skill.mode === "archify", archifyVersion: skill.version });
     const serviceModels = new Map(artifacts.snapshots.map((snapshot) => {
@@ -29,11 +32,85 @@ export async function prepareRunDocumentation(packageRoot, config, runId) {
     const candidate = join(artifacts.root, "candidate-vault");
     await rm(candidate, { recursive: true, force: true });
     await buildCandidateVault(candidate, model, artifacts.graph, serviceModels, artifacts.facts, repositoryProfileOverrides(config.overrides));
+    await atomicWrite(join(candidate, "fuentes-conocimiento.json"), `${JSON.stringify(catalog, null, 2)}\n`);
     const rendered = renderDocument(model);
     const issues = validateDocument(model, { facts: artifacts.facts, evidence: artifacts.evidence, graph: artifacts.graph, rendered });
     await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);
     await atomicWrite(join(artifacts.root, "review.json"), `${JSON.stringify({ schema_version: 3, run_id: runId, issues, unresolved_questions: [], status: issues.some((item) => item.severity === "error" || item.severity === "security") ? "review_required" : "review", archify: { skill_status: skill.status, mode: skill.mode, sha256: skill.sha256, implementation: skill.implementation } }, null, 2)}\n`);
-    return { status: "review", run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
+    return { status: "review", run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, repository_sources: catalog.repositories, knowledge_catalog: catalog, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
+}
+/** Loads the requested run together with the latest published knowledge for repositories not present in it. */
+export async function loadWorkspaceArtifacts(config, runId) {
+    const requested = await loadRunArtifacts(config, runId);
+    return (await composeWorkspaceArtifacts(config, requested)).artifacts;
+}
+async function composeWorkspaceArtifacts(config, requested) {
+    const configured = new Set(config.repositories.map((repository) => repository.id));
+    const sources = await discoverPublishedRepositorySources(config, configured);
+    for (const snapshot of requested.snapshots)
+        sources.set(snapshot.repository_id, requested.run_id);
+    const cache = new Map([[requested.run_id, requested]]);
+    const snapshots = [], facts = [], evidence = [], inventories = [];
+    const repositorySources = {};
+    for (const [repositoryId, sourceRunId] of [...sources.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        if (!configured.has(repositoryId))
+            continue;
+        let source = cache.get(sourceRunId);
+        if (source === undefined) {
+            try {
+                source = await loadRunArtifacts(config, sourceRunId);
+            }
+            catch {
+                continue;
+            }
+            cache.set(sourceRunId, source);
+        }
+        const snapshot = source.snapshots.find((item) => item.repository_id === repositoryId);
+        const inventory = source.inventories.find((item) => item.repository_id === repositoryId);
+        if (snapshot === undefined || inventory === undefined)
+            continue;
+        snapshots.push(snapshot);
+        inventories.push(inventory);
+        for (const fact of source.facts)
+            if (fact.component_id === repositoryId || fact.component_id.startsWith(`${repositoryId}:`))
+                facts.push(fact);
+        for (const item of source.evidence)
+            if (item.repository_id === repositoryId)
+                evidence.push(item);
+        repositorySources[repositoryId] = { run_id: sourceRunId, snapshot_id: snapshot.id, commit_oid: snapshot.commit_oid, requested_ref: snapshot.requested_ref };
+    }
+    const aliases = Object.fromEntries(Object.entries(asObject(config.overrides?.aliases)).filter((entry) => typeof entry[1] === "string"));
+    const scenario = {
+        schema_version: 3,
+        id: stableId("scenario", snapshots.map((snapshot) => snapshot.id), aliases),
+        snapshots: snapshots.map((snapshot) => ({ repository_id: snapshot.repository_id, snapshot_id: snapshot.id })),
+        environment: null,
+        aliases,
+    };
+    const graph = buildGraph(facts, scenario);
+    const catalog = { schema_version: 3, repositories: repositorySources, updated_at: new Date().toISOString() };
+    return { artifacts: { run_id: requested.run_id, root: requested.root, snapshots, facts, evidence, inventories, graph }, catalog };
+}
+async function discoverPublishedRepositorySources(config, configured) {
+    const result = new Map();
+    const stored = await readJson(join(config.state_root, "knowledge-catalog.json")).catch(() => null);
+    if (stored?.schema_version === 3)
+        for (const [repositoryId, entry] of Object.entries(stored.repositories)) {
+            if (configured.has(repositoryId) && /^run-[A-Za-z0-9._-]+$/u.test(entry.run_id))
+                result.set(repositoryId, entry.run_id);
+        }
+    const entries = await readdir(join(config.state_root, "runs"), { withFileTypes: true }).catch(() => []);
+    for (const entry of entries.filter((item) => item.isDirectory() && /^run-[A-Za-z0-9._-]+$/u.test(item.name)).sort((a, b) => a.name.localeCompare(b.name))) {
+        const root = validatedRunRoot(config.state_root, entry.name);
+        const published = await readFile(join(root, "publication-authorization.json"), "utf8").then(() => true).catch(() => false);
+        if (!published)
+            continue;
+        const run = await readJson(join(root, "run.json")).catch(() => null);
+        for (const snapshot of run?.snapshots ?? [])
+            if (configured.has(snapshot.repository_id))
+                result.set(snapshot.repository_id, entry.name);
+    }
+    return result;
 }
 function repositoryProfileOverrides(overrides) {
     const metadata = asObject(overrides?.repository_metadata);
@@ -59,12 +136,21 @@ export async function prepareAndPublishDocumentation(packageRoot, config, runId)
     if (prepared.blocking_issues > 0)
         throw new Error(`La validación mecánica bloqueó la publicación: ${prepared.blocking_issues} incidencia(s) de error o seguridad.`);
     const current = await equivalentCurrentEdition(config.vault_root, runId, prepared.candidate_vault);
-    if (current !== null)
+    if (current !== null) {
+        await persistKnowledgeCatalog(config, prepared.knowledge_catalog, runId);
         return { ...prepared, status: "published", published: true, reused_edition: true, edition: current, obsidian_path: join(config.vault_root, "Actual", "Inicio.md") };
+    }
     const authorization = await createAutomaticPublicationReceipt({ runId, candidateRoot: prepared.candidate_vault, scope: [runId] });
     await atomicWrite(join(validatedRunRoot(config.state_root, runId), "publication-authorization.json"), `${JSON.stringify(authorization, null, 2)}\n`);
     const edition = await new LocalPublicationTarget(config.vault_root, "automatic-primary").publish(prepared.candidate_vault, authorization, {});
+    await persistKnowledgeCatalog(config, prepared.knowledge_catalog, runId);
     return { ...prepared, status: "published", published: true, reused_edition: false, edition, obsidian_path: join(config.vault_root, "Actual", "Inicio.md") };
+}
+async function persistKnowledgeCatalog(config, catalog, publicationRunId) {
+    await atomicWrite(join(config.state_root, "knowledge-catalog.json"), `${JSON.stringify(catalog, null, 2)}\n`);
+    const repositories = Object.keys(catalog.repositories).sort();
+    const refs = Object.fromEntries(Object.entries(catalog.repositories).map(([id, entry]) => [id, entry.requested_ref]));
+    await atomicWrite(join(config.state_root, "current-run.json"), `${JSON.stringify({ schema_version: 3, run_id: publicationRunId, repositories, refs, repository_sources: catalog.repositories, published: true, updated_at: new Date().toISOString() }, null, 2)}\n`);
 }
 async function equivalentCurrentEdition(vaultRoot, runId, candidateRoot) {
     let current;
@@ -83,13 +169,15 @@ async function equivalentCurrentEdition(vaultRoot, runId, candidateRoot) {
 export async function loadRunArtifacts(config, runId) {
     const root = validatedRunRoot(config.state_root, runId);
     const run = await readJson(join(root, "run.json"));
-    const graph = await readJson(join(root, "graph.json"));
+    const graph = redactValue(await readJson(join(root, "graph.json")));
     const facts = [];
     const evidence = [];
     const inventories = [];
     for (const repositoryId of [...new Set(run.snapshots.map((snapshot) => snapshot.repository_id))]) {
-        facts.push(...await readJson(join(root, repositoryId, "facts", "all.json")));
-        evidence.push(...await readJson(join(root, repositoryId, "evidence.json")));
+        for (const fact of await readJson(join(root, repositoryId, "facts", "all.json")))
+            facts.push({ ...fact, value: redactValue(fact.value) });
+        for (const item of await readJson(join(root, repositoryId, "evidence.json")))
+            evidence.push(item);
         inventories.push(await readJson(join(root, repositoryId, "inventory.json")));
     }
     return { run_id: runId, root, snapshots: run.snapshots, facts, evidence, inventories, graph };

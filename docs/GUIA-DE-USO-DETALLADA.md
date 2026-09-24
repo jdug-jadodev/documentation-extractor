@@ -74,6 +74,14 @@ Desde la carpeta del motor:
 pnpm workspace:install -- --workspace C:\Workspaces\equipo\equipo.code-workspace --vault C:\Documentacion\Boveda-Obsidian --repository-ids frontend,pedidos-api,pagos-api --branch main
 ```
 
+Si el workspace ya está configurado y solo necesita recibir herramientas o instrucciones nuevas del motor, use:
+
+```powershell
+pnpm workspace:install -- --workspace C:\Workspaces\equipo\equipo.code-workspace --integration-only --force
+```
+
+Ese modo no reescribe `knowledge.yaml`, no cambia repositorios o dominios y no inicia análisis.
+
 Este comando no copia el motor ni analiza repositorios. Genera la configuración, añade la carpeta de control como primera raíz si falta y deja el estado privado apuntando a la instalación del motor. Ejecutarlo nuevamente con los mismos argumentos es idempotente.
 
 ### Iniciar manualmente
@@ -290,6 +298,8 @@ npm run docs -- documentar --run <run-id>
 
 - `revisar` es opcional: prepara y valida la bóveda candidata privada sin cambiar la edición visible.
 - `documentar` regenera el candidato, ejecuta las validaciones mecánicas, reemplaza la vista estable `Actual` y conserva únicamente esa edición canónica en `Publicaciones/<edición>`.
+- La vista es acumulativa por repositorio: un run parcial agrega o actualiza únicamente sus repositorios y conserva los demás desde su último run publicado. Después reconstruye los mapas globales con todo el catálogo. `enabled: false` evita nuevos análisis automáticos, pero no elimina documentación existente.
+- `Actual/fuentes-conocimiento.json` identifica el run y commit que aporta cada repositorio a la vista vigente.
 - No existe un paso de aprobación humana. Los estados `candidate` y `unresolved` no bloquean la documentación: se publican claramente como limitaciones. Solo un error mecánico o de seguridad bloquea la publicación.
 - **Abrir Obsidian** abre la bóveda configurada.
 
@@ -297,7 +307,8 @@ La salida documental contiene:
 
 - `Actual/Servicios/<servicio>/<versión>/servicio.md`: una ficha completa por servicio, no ocho copias parciales.
 - `Actual/Servicios/<servicio>/<versión>/diagramas/arquitectura.md`: Mermaid de responsabilidades y relaciones del servicio.
-- `Actual/Servicios/<servicio>/<versión>/flujos/<metodo-ruta>.md`: un Markdown y un Mermaid independiente por endpoint, con handler y módulos alcanzables por imports estáticos.
+- `Actual/Servicios/<servicio>/<versión>/flujos/<metodo-ruta>.md`: un Markdown y un Mermaid por endpoint o pantalla, con la cadena AST de clases/métodos, datos, integraciones y enlaces candidatos/no resueltos.
+- `Actual/Servicios/<servicio>/<versión>/clases/` y `metodos/`: páginas navegables con firmas, responsabilidades, llamadores, llamadas, líneas, fragmentos breves y evidencia.
 - `Actual/Flujos/end-to-end.md`: índice de todos los flujos y mapa de consumo entre servicios.
 - `Actual/Mapas/microservicios.md`: relaciones HTTP entrantes/salientes con estado, llamada observada, evidencia y limitaciones.
 - `Actual/Mapas/relaciones.md`: arquitectura general compatible con el contrato Archify; Archify queda reservado para esta vista global.
@@ -386,14 +397,18 @@ Herramientas MCP disponibles:
 - `docsys_explain_relation`: relaciones de un run.
 - `docsys_trace_flow`: camino entre componentes.
 - `docsys_query`: hechos ya extraídos.
+- `docsys_explain_service`: resumen compacto precalculado de tecnologías, endpoints, relaciones, clases y métodos de un servicio; úsalo antes de pedir hechos crudos.
+- `docsys_explain_endpoint`: flujo compacto de un endpoint con handler, llamadas entre métodos, datos e integraciones; no reanaliza el repositorio.
 - `docsys_prepare_proposal`: borrador pendiente de revisión.
 - `docsys_prepare_documentation`: genera fichas, clases/métodos, diagramas de servicio, un Mermaid por endpoint y mapas de relaciones; luego publica automáticamente la edición final en `Actual`.
 
 No existen herramientas MCP separadas para aprobar o publicar: la publicación forma parte de `docsys_prepare_documentation`.
 
+Para reducir créditos, formule primero la pregunta con `docsys_explain_service` o `docsys_explain_endpoint`. Estas herramientas entregan solo el subgrafo necesario; `docsys_query` con límites altos debe reservarse para auditorías o detalles que no aparezcan en la explicación compacta.
+
 ### Archify y los diagramas
 
-La skill `archify-documentation` se usa para la estructura ASD-TSE-100 y el mapa general de arquitectura. Si existe un adaptador Archify externo comprobado, el motor puede registrar `archify.status: executed`. Si no existe, genera el mapa general con Mermaid determinista y registra modo `fallback`; no afirma que Archify externo se ejecutó. Los diagramas por servicio y por endpoint siempre son Mermaid determinista del motor, porque necesitan trazabilidad directa a hechos e imports.
+La skill `archify-documentation` se usa para la estructura ASD-TSE-100 y el mapa general de arquitectura. Si existe un adaptador Archify externo comprobado, el motor puede registrar `archify.status: executed`. Si no existe, genera el mapa general con Mermaid determinista y registra modo `fallback`; no afirma que Archify externo se ejecutó. Los diagramas por servicio, endpoint y pantalla son Mermaid determinista: enlazan símbolos extraídos por AST, datos e integraciones con trazabilidad al archivo y las líneas observadas.
 
 ## 14. Ejemplos de conversación
 
@@ -419,7 +434,7 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 
 ## 15. Lo que sigue pendiente antes de usarlo como validado
 
-- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 45/45.
+- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 46/46.
 - Autorizar la demo sintética si se desea ejecutarla.
 - Verificar VS Code, Copilot CLI e IntelliJ con sus versiones instaladas.
 - Instalar/configurar Copilot CLI y autorizar cualquier llamada real a los especialistas.

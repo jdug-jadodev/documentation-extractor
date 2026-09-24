@@ -73,7 +73,7 @@ async function buildInventoryInternal(reader, previous, changedPaths, options) {
 }
 function technologySignalsFromInventory(inventory) {
     const result = new Set();
-    const mapping = { dotnet: "dotnet", "java-spring": "spring", "java-weblogic": "jee", "js-angular": "angular", "js-react": "react", "node-express": "express" };
+    const mapping = { dotnet: "dotnet", "java-spring": "spring", "java-webflux": "webflux", "java-weblogic": "jee", "js-angular": "angular", "js-react": "react", "node-express": "express" };
     for (const candidate of inventory.candidate_stacks) {
         const signal = mapping[candidate.plugin_id];
         if (signal !== undefined)
@@ -114,7 +114,7 @@ function inferTechnologies(path, signals) {
     if (name === "package.json")
         return ["nodejs", ...(signals.has("angular") ? ["angular"] : []), ...(signals.has("react") ? ["react"] : []), ...(signals.has("express") ? ["express"] : [])];
     if (name === "pom.xml" || name.startsWith("build.gradle"))
-        return ["java", ...(signals.has("spring") ? ["spring"] : [])];
+        return ["java", ...(signals.has("spring") ? ["spring"] : []), ...(signals.has("webflux") ? ["webflux"] : [])];
     if (name === "pyproject.toml" || name === "requirements.txt")
         return ["python"];
     if (name.endsWith(".csproj"))
@@ -132,6 +132,7 @@ function detectCandidateStacks(repositoryId, files, signals) {
         ["python", ["python"], byLanguage.has("python")],
         ["dotnet", ["c_sharp", "xml"], signals.has("dotnet")],
         ["java-spring", ["java"], signals.has("spring")],
+        ["java-webflux", ["java"], signals.has("webflux")],
         ["java-weblogic", ["java", "xml"], signals.has("jee")],
         ["js-angular", ["typescript"], signals.has("angular")],
         ["js-react", ["typescript", "tsx", "javascript"], signals.has("react")],
@@ -161,6 +162,8 @@ function collectTechnologySignals(path, source, signals) {
         signals.add("express");
     if (/\borg\.springframework\b|\bspring-boot\b/u.test(sample))
         signals.add("spring");
+    if (/\bspring-boot-starter-webflux\b|\bRouterFunction\s*<|\bRouterFunctions\.(?:route|nest)\s*\(|\bServerRequest\b|\bServerResponse\b/u.test(source.slice(0, 512 * 1024)))
+        signals.add("webflux");
     if (["web.xml", "weblogic.xml", "application.xml"].includes(name) || /\b(?:jakarta|javax)\.(?:ws\.rs|ejb|jms)\b/u.test(sample))
         signals.add("jee");
 }
