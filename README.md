@@ -4,7 +4,7 @@ Motor local y determinista que extrae hechos de repositorios autorizados, correl
 
 ## Estado
 
-El motor está implementado en `src/`. La suite automatizada disponible pasa 52/52 y el servidor MCP se probó por `stdio` sobre un workspace real de varios repositorios. La extracción AST TypeScript/Java, Spring anotado, WebFlux funcional, Reactor, resolución de llamadas e inyección, actualización incremental por commit/archivo, árboles físicos, páginas por clase/método y diagramas verticales se comprobaron en Windows con fixtures y repositorios reales. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente como pendientes hasta ejecutar la campaña completa de aceptación; tampoco se han probado de forma instrumentada los especialistas, Archify externo, Azure ni la matriz Linux/macOS.
+El motor está implementado en `src/`. La suite automatizada disponible pasa 59/59 y el servidor MCP se probó por `stdio` sobre un workspace real. La extracción AST TypeScript/Java, Spring anotado, WebFlux funcional, Reactor, resolución de llamadas e inyección, actualización incremental, documentación sin tests, índice documental, compilación de contexto, análisis y propuestas trazables se comprobaron en Windows con fixtures y con el flujo real `GET /permisos-admin`. Los 128 criterios P01–P112/N01–N16 siguen catalogados individualmente hasta ejecutar la campaña completa de aceptación; tampoco se han probado de forma instrumentada Archify externo, Azure ni la matriz Linux/macOS.
 
 La instalación del motor conserva su `knowledge.yaml` en `configuration_pending`. Cada workspace recibe su propia configuración e integración; los runs privados permanecen en el motor y la bóveda Obsidian es una tercera ubicación separada. Ninguna entrada inicia análisis automáticamente.
 
@@ -64,7 +64,7 @@ pnpm copilot:config cli
 pnpm mcp
 ```
 
-`copilot:config ide` imprime el formato `servers` para VS Code/IntelliJ; `copilot:config cli` imprime `mcpServers` para Copilot CLI. Esos clientes inician `mcp` por `stdio` cuando lo necesitan; no es un daemon permanente. El conector ofrece once herramientas, incluidas `docsys_explain_service` y `docsys_explain_endpoint` para consultar subgrafos precalculados compactos sin reenviar cientos de hechos a Copilot.
+`copilot:config ide` imprime el formato `servers` para VS Code/IntelliJ; `copilot:config cli` imprime `mcpServers` para Copilot CLI. Esos clientes inician `mcp` por `stdio` cuando lo necesitan; no es un daemon permanente. El conector ofrece 23 herramientas: además de documentar y consultar hechos, puede buscar documentación, compilar contexto acotado, localizar capacidades, analizar impacto o migraciones, investigar un flujo con límites y preparar propuestas sin recorrer repositorios completos.
 
 Para preparar un workspace sin copiar el motor dentro de él:
 
@@ -87,6 +87,7 @@ El instalador coloca en la carpeta contenedora del workspace únicamente `knowle
 - `src/discovery/` y `src/extractors/`: inventario y plugins .NET, Spring, JEE/WebLogic, Angular, React, Python y Node/Express; el extractor transversal AST registra clases, métodos, receptores, llamadas, composición, inyección, fragmentos, módulos, imports y tecnologías para TypeScript/JavaScript y Java.
 - `assets/grammars/`: gramáticas WASM locales con hashes y licencias.
 - `src/correlation/`, `src/engine.ts` y `src/run_services.ts`: escenarios, grafo, relaciones, flujos, comparación y propuestas.
+- `src/intelligence/`: fragmentación e índices documentales, grafo lateral, capacidades, recuperación presupuestada, impacto, migraciones e investigación progresiva.
 - `src/mcp.ts`: conexión local de Copilot.
 - `src/ai/`: perfiles aislados, presupuesto, JSONL y adaptador Copilot.
 - `src/documentation/`, `src/review/`, `src/obsidian/`: ASD-TSE-100, validación mecánica, Mermaid por servicio y flujo, y bóveda candidata privada.

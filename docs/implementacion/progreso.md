@@ -31,7 +31,7 @@ Este registro separa código implementado, compilaciones, pruebas realizadas, pr
 - La vista `Actual` se reemplaza completa y atómicamente; la edición anterior no participa en consultas ni en el grafo vigente. El run canónico queda registrado en `current-run.json`.
 - La publicación mantiene `knowledge-catalog.json` por workspace. Un run parcial sustituye solo los repositorios que contiene, reutiliza el último run publicado de los demás y reconstruye la vista, los flujos y el grafo con el conjunto acumulado. Deshabilitar un repositorio no lo borra.
 - El workspace recibe solo el agente de entrada, instrucciones, skill y configuración MCP. Los seis perfiles interpretativos se generan en el runtime privado con `tools: []`; Inventariador y Publicador son responsabilidades de código. No se copian ocho agentes con acceso directo a los repositorios.
-- `workspace:install --integration-only --force` actualiza agente e integración MCP sin tocar `knowledge.yaml`; se aplicó al workspace real para exponer las once herramientas sin ejecutar análisis.
+- `workspace:install --integration-only --force` actualiza agente e integración MCP sin tocar `knowledge.yaml`; expone las 23 herramientas sin ejecutar análisis.
 
 ## Configuración real usada
 
@@ -44,7 +44,7 @@ Este registro separa código implementado, compilaciones, pruebas realizadas, pr
 
 ## Compilaciones realizadas
 
-- Compatibilidad declarada Node.js 20.x–24.x mediante NVM y pnpm 10.x. Node 20.19.5, versión exacta del PC empresarial, y Node 24.21.0 fueron comprobados. Con Node 20.19.5 pasaron tipos, build, 46/46 pruebas y el smoke MCP sin reanálisis.
+- Compatibilidad declarada Node.js 20.x–24.x mediante NVM y pnpm 10.x. Node 20.19.5 es la versión empresarial objetivo y Node 24.21.0 se usó para la validación actual.
 - `node scripts/typecheck.mjs`: completado sin errores después de la ampliación de extractores y documentación.
 - `node scripts/build.mjs`: completado sin errores; `dist/` actualizado.
 - Tras separar los límites de aplicaciones y microservicios, tipos y build volvieron a completarse con Node 20.19.5 sin errores.
@@ -52,7 +52,7 @@ Este registro separa código implementado, compilaciones, pruebas realizadas, pr
 
 ## Pruebas realizadas
 
-- Suite actual: **52/52 superadas**, 0 fallos y 0 omitidas. Incluye regresión Express/TypeScript y nuevos fixtures Spring anotado, WebFlux funcional, lambdas, Reactor, Gradle, Lombok, source sets y diagramas verticales.
+- Suite actual: **59/59 superadas**, 0 fallos y 0 omitidas. Incluye regresiones de extracción, publicación acumulativa, exclusión de tests, WebFlux funcional e inteligencia documental.
 - Validación `template` (`main`, commit `9cd8acf3e5438d812a4d3145500b2e24bfe2f1ab`): 6 endpoints completos bajo `/user`, 329 hechos y handlers resueltos.
 - Validación `gr` (`master`, commit `1ff19af62251be07dff4ad9d190ab8bc92b3f01b`): 124.931 hechos, 106 rutas WebFlux de producción, 0 rutas de tests, 947 pipelines Reactor, 2 SSE, 9 WebClient, 40 dependencias Gradle, 1.829 fuentes y 1.951 archivos documentables.
 - La bóveda candidata de `gr` produjo árbol de 249.948 caracteres, Mermaid vertical de 80 archivos con aviso explícito de 1.749 omitidos y 9.203 archivos navegables. La publicación final se bloqueó por el detector de secretos; se conservó el candidato privado y no se desactivó la protección.
@@ -62,7 +62,7 @@ Este registro separa código implementado, compilaciones, pruebas realizadas, pr
 - Las explicaciones compactas de servicio y endpoint se probaron contra hechos precalculados; no invocan IA ni reanalizan repositorios.
 - La prueba acumulativa reproduce la publicación de un repositorio nuevo después de otro ya publicado y confirma que ambos permanecen en la bóveda candidata.
 - La prueba de documentación comprueba que una aplicación cliente y un microservicio aparecen en grupos independientes, que las etiquetas configuradas se respetan y que los sistemas relacionados quedan fuera del límite interno del repositorio.
-- Transporte MCP `stdio`: protocolo `2025-06-18`, servidor `sistema-documentacion` 4.0.0 y once herramientas declaradas. El smoke de solo lectura reconoció los cuatro repositorios configurados y confirmó `analysis_executed: false`.
+- Transporte MCP `stdio`: protocolo `2025-06-18`, servidor `sistema-documentacion` 4.0.0 y 23 herramientas declaradas. El smoke no inicia análisis y las herramientas nuevas reutilizan índices privados por run.
 - Pruebas de actualización con repositorios Git sintéticos: sincronización fast-forward, cambio de una sola clase, reproceso de un único archivo, reutilización del intacto, incorporación del método nuevo, no-op sin otro commit y rechazo de un árbol sucio.
 - Prueba de publicación temporal: la segunda edición reemplazó `Actual` y eliminó de `Publicaciones` la edición anterior, dejando una sola canónica.
 - Prueba MCP de documentación sobre el run vigente: no reanalizó, devolvió `published: true`, reutilizó la edición y apuntó a `Actual/Inicio.md`.

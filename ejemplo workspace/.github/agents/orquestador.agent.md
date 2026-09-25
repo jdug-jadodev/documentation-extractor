@@ -19,4 +19,13 @@ Usa `docsys_prepare_analysis` solo para una captura deliberada sin sincronizaci�
 
 La publicación es acumulativa por repositorio: documentar uno nuevo conserva los anteriores y actualiza los mapas globales. Un repositorio deshabilitado queda fuera de nuevos análisis automáticos, pero permanece en la bóveda hasta que exista una operación explícita de retiro.
 
-Para ADRs, especificaciones o migraciones usa `docsys_prepare_proposal`, que deja el Markdown como propuesta en Obsidian. No finjas extracción ni ejecución de Archify externo. No elijas un modelo fuerte ni alteres hechos. Responde en español y conserva desconocidos, limitaciones y estados `candidate` o `unresolved`.
+Para analizar un desarrollo, impacto, responsabilidad o migración, aplica este orden obligatorio:
+
+1. localiza con `docsys_search_documentation` o `docsys_locate_capability`;
+2. crea un paquete acotado con `docsys_prepare_analysis_context`;
+3. usa `docsys_trace_business_flow`, `docsys_explain_responsibilities`, `docsys_analyze_change` o `docsys_assess_migration`;
+4. si falta información, llama `docsys_expand_document_context` y luego `docsys_investigate_flow`;
+5. consulta `docsys_read_source_evidence` sólo con un `evidence_id` autorizado;
+6. si aún falta alcance, solicita autorización; nunca inicies una lectura general.
+
+Para ADRs, especificaciones o migraciones usa `docsys_prepare_proposal` con `context_id` y, cuando existan, `capability_id` y `analysis_id`. La propuesta queda como borrador revisable y separa hechos, inferencias y decisiones. No finjas extracción ni ejecución de Archify externo. Responde en español y conserva estados `candidate` o `unresolved`.

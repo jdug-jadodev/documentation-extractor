@@ -89,7 +89,7 @@ async function main() {
   const yaml = vaultPath === null ? null : [
     "schema_version: 3", "setup_status: configured", `workspace_file: ${yamlString(workspaceFile)}`, `vault_path: ${yamlString(vaultPath)}`, `state_path: ${yamlString(statePath)}`, "repositories:",
     ...repositories.flatMap((repo) => [`  - id: ${yamlString(repo.id)}`, `    path: ${yamlString(repo.path)}`, "    enabled: true", `    default_branch: ${yamlString(branch)}`]),
-    "ai:", "  provider: copilot-cli", "  model: null", "  strong_model: null", "  max_invocations: 8", "sharing:", "  mode: local", "azure:", "  enabled: false", "",
+    "documentation:", "  include_tests: false", "documentation_intelligence:", "  enabled: true", "  max_context_tokens: 15000", "  max_documents: 40", "  max_flows: 5", "  max_symbols: 25", "  max_documents_per_repository: 15", "  include_tests_by_default: false", "investigation:", "  max_dependency_depth: 3", "  default_max_files: 8", "  hard_max_files: 20", "  default_max_bytes: 262144", "  hard_max_bytes: 1048576", "  allow_repository_wide_scan: false", "ai:", "  provider: copilot-cli", "  model: null", "  strong_model: null", "  max_invocations: 8", "sharing:", "  mode: local", "azure:", "  enabled: false", "",
   ].join("\n");
   const mcp = `${JSON.stringify({ servers: { "sistema-documentacion": { type: "stdio", command: process.execPath, args: [join(packageRoot, "scripts", "mcp.mjs"), "--config", configPath] } } }, null, 2)}\n`;
   const portableMcp = `${JSON.stringify({ mcpServers: { "sistema-documentacion": { type: "local", command: process.execPath, args: [join(packageRoot, "scripts", "mcp.mjs"), "--config", configPath], env: {}, tools: ["*"] } } }, null, 2)}\n`;

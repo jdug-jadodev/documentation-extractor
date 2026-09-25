@@ -49,6 +49,12 @@ export function stringifyConfiguration(config) {
     ];
     for (const repository of config.repositories)
         lines.push(`  - id: ${yamlString(repository.id)}`, `    path: ${yamlString(repository.path)}`, `    enabled: ${repository.enabled}`, `    default_branch: ${repository.default_branch === null ? "null" : yamlString(repository.default_branch)}`);
+    if (config.documentation !== undefined)
+        lines.push("documentation:", "  include_tests: false");
+    if (config.documentation_intelligence !== undefined)
+        lines.push("documentation_intelligence:", `  enabled: ${config.documentation_intelligence.enabled}`, `  max_context_tokens: ${config.documentation_intelligence.max_context_tokens}`, `  max_documents: ${config.documentation_intelligence.max_documents}`, `  max_flows: ${config.documentation_intelligence.max_flows}`, `  max_symbols: ${config.documentation_intelligence.max_symbols}`, `  max_documents_per_repository: ${config.documentation_intelligence.max_documents_per_repository}`, "  include_tests_by_default: false");
+    if (config.investigation !== undefined)
+        lines.push("investigation:", `  max_dependency_depth: ${config.investigation.max_dependency_depth}`, `  default_max_files: ${config.investigation.default_max_files}`, `  hard_max_files: ${config.investigation.hard_max_files}`, `  default_max_bytes: ${config.investigation.default_max_bytes}`, `  hard_max_bytes: ${config.investigation.hard_max_bytes}`, "  allow_repository_wide_scan: false");
     lines.push("ai:", `  provider: ${config.ai.provider}`, `  model: ${config.ai.model === null ? "null" : yamlString(config.ai.model)}`, `  strong_model: ${config.ai.strong_model === null ? "null" : yamlString(config.ai.strong_model)}`, `  max_invocations: ${config.ai.max_invocations}`, "sharing:", `  mode: ${config.sharing.mode}`, "azure:", `  enabled: ${config.azure.enabled}`);
     if (config.azure.repository_url !== undefined)
         lines.push(`  repository_url: ${yamlString(config.azure.repository_url)}`);

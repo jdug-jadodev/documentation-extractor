@@ -4,7 +4,7 @@ import * as z from "zod/v4";
 import { ContractValidator } from "./contracts/validator.js";
 import { configurationState, loadConfiguration } from "./config.js";
 import { runDeterministicScenario } from "./engine.js";
-import { explainRelations, findDocumentableFlows, loadRunArtifacts, loadWorkspaceArtifacts, prepareAndPublishDocumentation, prepareFlowDocumentation, prepareProposal, queryRunArtifacts, traceFlow } from "./run_services.js";
+import { analyzeRunChange, assessRunMigration, expandRunDocumentContext, explainRelations, explainRunResponsibilities, findDocumentableFlows, investigateRunFlow, loadRunArtifacts, loadWorkspaceArtifacts, locateRunCapability, prepareAndPublishDocumentation, prepareFlowDocumentation, prepareProposal, prepareRunAnalysisContext, queryRunArtifacts, readRunSourceEvidence, searchRunDocumentation, traceFlow, traceRunBusinessFlow } from "./run_services.js";
 import { explainEndpointFromFacts, explainServiceFromFacts } from "./documentation/semantic.js";
 import { stageProposalDraft } from "./publication/draft.js";
 import { refreshKnowledge } from "./refresh.js";
@@ -105,12 +105,82 @@ export async function buildDocumentationMcp(options) {
         const config = await loadConfiguration(options.configPath, validator);
         return await prepareFlowDocumentation(config, run_id, component, method, path);
     }));
-    server.registerTool("docsys_prepare_proposal", {
-        description: "Prepara un borrador determinista de especificación, migración o ADR basado en un run. Siempre queda pendiente de revisión; no modifica aplicaciones.",
-        inputSchema: z.object({ run_id: z.string().min(1), type: z.enum(["specification", "migration", "adr"]), request: z.string().min(1), requirements: z.array(z.string()).optional() }),
-    }, async ({ run_id, type, request, requirements }) => toolResult(async () => {
+    server.registerTool("docsys_search_documentation", {
+        description: "Busca secciones semánticas de la documentación ya generada. No lee repositorios ni invoca IA.",
+        inputSchema: z.object({ run_id: z.string().min(1), query: z.string().min(1), repository: z.string().min(1).optional(), limit: z.number().int().min(1).max(100).optional() }),
+    }, async ({ run_id, query, repository, limit }) => toolResult(async () => {
         const config = await loadConfiguration(options.configPath, validator);
-        const result = await prepareProposal(config, run_id, type, request, requirements ?? []);
+        return await searchRunDocumentation(options.packageRoot, config, run_id, query, repository, limit);
+    }));
+    server.registerTool("docsys_expand_document_context", {
+        description: "Expande chunks seleccionados mediante wikilinks y relaciones técnicas, sin leer código fuente.",
+        inputSchema: z.object({ run_id: z.string().min(1), chunk_ids: z.array(z.string().min(1)).min(1).max(40), depth: z.number().int().min(1).max(5).optional(), limit: z.number().int().min(1).max(200).optional() }),
+    }, async ({ run_id, chunk_ids, depth, limit }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await expandRunDocumentContext(options.packageRoot, config, run_id, chunk_ids, depth, limit);
+    }));
+    server.registerTool("docsys_prepare_analysis_context", {
+        description: "Compila un contexto pequeño, deduplicado y trazable para desarrollo, migración, impacto o responsabilidades.",
+        inputSchema: z.object({ run_id: z.string().min(1), query: z.string().min(1), intent: z.enum(["development", "migration", "impact", "responsibilities"]), repository: z.string().min(1).optional() }),
+    }, async ({ run_id, query, intent, repository }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await prepareRunAnalysisContext(options.packageRoot, config, run_id, query, intent, repository);
+    }));
+    server.registerTool("docsys_locate_capability", {
+        description: "Localiza una capacidad funcional y sus sistemas usando el índice documental.",
+        inputSchema: z.object({ run_id: z.string().min(1), query: z.string().min(1) }),
+    }, async ({ run_id, query }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await locateRunCapability(options.packageRoot, config, run_id, query);
+    }));
+    server.registerTool("docsys_trace_business_flow", {
+        description: "Reconstruye un flujo funcional multi-repositorio desde documentación y relaciones indexadas.",
+        inputSchema: z.object({ run_id: z.string().min(1), query: z.string().min(1) }),
+    }, async ({ run_id, query }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await traceRunBusinessFlow(options.packageRoot, config, run_id, query);
+    }));
+    server.registerTool("docsys_explain_responsibilities", {
+        description: "Explica responsabilidades extraídas y decisiones humanas explícitas por sistema, con confianza y evidencia.",
+        inputSchema: z.object({ run_id: z.string().min(1), query: z.string().min(1) }),
+    }, async ({ run_id, query }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await explainRunResponsibilities(options.packageRoot, config, run_id, query);
+    }));
+    server.registerTool("docsys_analyze_change", {
+        description: "Analiza alcance, impacto, criticidad e incertidumbre sin inventar tiempo ni costo.",
+        inputSchema: z.object({ run_id: z.string().min(1), request: z.string().min(1), context_id: z.string().min(1).optional() }),
+    }, async ({ run_id, request, context_id }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await analyzeRunChange(options.packageRoot, config, run_id, request, context_id);
+    }));
+    server.registerTool("docsys_assess_migration", {
+        description: "Evalúa una migración, dependencias heredadas, transición y rollback desde contexto documental.",
+        inputSchema: z.object({ run_id: z.string().min(1), request: z.string().min(1), context_id: z.string().min(1).optional(), from: z.string().min(1).optional(), to: z.string().min(1).optional() }),
+    }, async ({ run_id, request, context_id, from, to }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await assessRunMigration(options.packageRoot, config, run_id, request, { ...(context_id === undefined ? {} : { contextId: context_id }), ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) });
+    }));
+    server.registerTool("docsys_investigate_flow", {
+        description: "Aplica escalamiento progresivo a un flujo; nunca inicia automáticamente un escaneo general.",
+        inputSchema: z.object({ run_id: z.string().min(1), query: z.string().min(1), level: z.number().int().min(1).max(6).optional() }),
+    }, async ({ run_id, query, level }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await investigateRunFlow(options.packageRoot, config, run_id, query, level);
+    }));
+    server.registerTool("docsys_read_source_evidence", {
+        description: "Lee un único fragmento productivo autorizado por evidence_id, con presupuesto, hash, redacción y auditoría.",
+        inputSchema: z.object({ run_id: z.string().min(1), evidence_id: z.string().min(1), max_bytes: z.number().int().min(1).max(1048576).optional() }),
+    }, async ({ run_id, evidence_id, max_bytes }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        return await readRunSourceEvidence(config, run_id, evidence_id, max_bytes);
+    }));
+    server.registerTool("docsys_prepare_proposal", {
+        description: "Prepara un borrador determinista desde contexto documental trazable. Siempre queda pendiente de revisión; no modifica aplicaciones.",
+        inputSchema: z.object({ run_id: z.string().min(1), type: z.enum(["specification", "migration", "adr"]), request: z.string().min(1), requirements: z.array(z.string()).optional(), context_id: z.string().min(1).optional(), capability_id: z.string().min(1).optional(), analysis_id: z.string().min(1).optional() }),
+    }, async ({ run_id, type, request, requirements, context_id, capability_id, analysis_id }) => toolResult(async () => {
+        const config = await loadConfiguration(options.configPath, validator);
+        const result = await prepareProposal(config, run_id, type, request, requirements ?? [], { packageRoot: options.packageRoot, validator, ...(context_id === undefined ? {} : { contextId: context_id }), ...(capability_id === undefined ? {} : { capabilityId: capability_id }), ...(analysis_id === undefined ? {} : { analysisId: analysis_id }) });
         const obsidian_draft = await stageProposalDraft(config.vault_root, run_id, result.proposal_id, result.markdown_path);
         return { ...result, obsidian_draft };
     }));

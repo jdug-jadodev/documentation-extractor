@@ -1,6 +1,6 @@
 # Plan de inteligencia documental, análisis de desarrollos y migraciones
 
-Estado: **en ejecución — fase 1 completada**  
+Estado: **completado — fases 0 a 9 implementadas y validadas**
 Proyecto: `documentation-extractor`  
 Objetivo: conservar la documentación técnica enriquecida actual y añadir una capa nueva que permita a Copilot analizar flujos, responsabilidades, desarrollos y migraciones sin recorrer repositorios completos.
 
@@ -738,7 +738,7 @@ Las mejoras específicas de WebFlux se implementarán en el extractor Java, pero
 
 - [x] Capturar el baseline de la documentación actual antes de filtrar pruebas.
 - [x] Definir invariantes de publicación mediante pruebas automatizadas.
-- [ ] Completar la medición de tiempo, memoria y relaciones; archivos y bytes ya tienen baseline.
+- [x] Completar la medición de tiempo, memoria y relaciones; archivos y bytes ya tienen baseline.
 - [x] Validar el caso vertical de referencia: permisos administrativos.
 
 ### Fase 1 — Exclusión de tests
@@ -762,70 +762,81 @@ Resultado del run real `run-2026-09-23T22-32-27-435Z-gr`:
 
 ### Fase 2 — Índice documental
 
-- [ ] Crear chunker semántico.
-- [ ] Implementar manifiesto y hashes.
-- [ ] Crear índices exactos.
-- [ ] Construir grafo de wikilinks.
-- [ ] Indexar incrementalmente.
-- [ ] Evitar duplicación entre ediciones.
+- [x] Crear chunker semántico.
+- [x] Implementar manifiesto y hashes.
+- [x] Crear índices exactos.
+- [x] Construir grafo de wikilinks.
+- [x] Indexar incrementalmente.
+- [x] Evitar duplicación entre ediciones.
 
 ### Fase 3 — Grafo lateral
 
-- [ ] Relacionar flujo con clases y métodos.
-- [ ] Resolver puerto con implementación.
-- [ ] Resolver inyección y bindings.
-- [ ] Conectar mappers, repositorios y datos.
-- [ ] Clasificar operadores reactivos.
-- [ ] Conectar relaciones entre repositorios.
+- [x] Relacionar flujo con clases y métodos.
+- [x] Resolver puerto con implementación.
+- [x] Resolver inyección y bindings.
+- [x] Conectar mappers, repositorios y datos.
+- [x] Clasificar operadores reactivos.
+- [x] Conectar relaciones entre repositorios.
 
 ### Fase 4 — Recuperación y contexto
 
-- [ ] Implementar búsqueda híbrida.
-- [ ] Implementar expansión por relaciones.
-- [ ] Aplicar presupuesto y deduplicación.
-- [ ] Crear plantillas por intención.
-- [ ] Exponer estadísticas del contexto.
+- [x] Implementar búsqueda híbrida.
+- [x] Implementar expansión por relaciones.
+- [x] Aplicar presupuesto y deduplicación.
+- [x] Crear plantillas por intención.
+- [x] Exponer estadísticas del contexto.
 
 ### Fase 5 — Investigación progresiva
 
-- [ ] Implementar niveles de escalada.
-- [ ] Crear lector por evidencia.
-- [ ] Aplicar límites de archivos, bytes y profundidad.
-- [ ] Registrar auditoría de lecturas.
-- [ ] Implementar agente investigador restringido.
-- [ ] Detenerse antes de exploraciones amplias.
+- [x] Implementar niveles de escalada.
+- [x] Crear lector por evidencia.
+- [x] Aplicar límites de archivos, bytes y profundidad.
+- [x] Registrar auditoría de lecturas.
+- [x] Implementar agente investigador restringido.
+- [x] Detenerse antes de exploraciones amplias.
 
 ### Fase 6 — Capacidades y responsabilidades
 
-- [ ] Definir contratos.
-- [ ] Inferir candidatos.
-- [ ] Incorporar overrides humanos.
-- [ ] Componer conocimiento multi-repositorio.
-- [ ] Exponer responsabilidad y confianza.
+- [x] Definir contratos.
+- [x] Inferir candidatos.
+- [x] Incorporar overrides humanos.
+- [x] Componer conocimiento multi-repositorio.
+- [x] Exponer responsabilidad y confianza.
 
 ### Fase 7 — Impacto y migraciones
 
-- [ ] Implementar modelo de impacto.
-- [ ] Implementar criticidad y confianza.
-- [ ] Detectar dependencias restantes con core.
-- [ ] Comparar implementación heredada y objetivo.
-- [ ] Producir fases, transición y rollback.
+- [x] Implementar modelo de impacto.
+- [x] Implementar criticidad y confianza.
+- [x] Detectar dependencias restantes con core.
+- [x] Comparar implementación heredada y objetivo.
+- [x] Producir fases, transición y rollback.
 
 ### Fase 8 — Propuestas
 
-- [ ] Hacer que `docsys_prepare_proposal` consuma un contexto.
-- [ ] Validar la salida con esquema.
-- [ ] Citar documentos y evidencias.
-- [ ] Separar hechos, inferencias y decisiones.
-- [ ] Publicar la propuesta como borrador revisable.
+- [x] Hacer que `docsys_prepare_proposal` consuma un contexto.
+- [x] Validar la salida con esquema.
+- [x] Citar documentos y evidencias.
+- [x] Separar hechos, inferencias y decisiones.
+- [x] Publicar la propuesta como borrador revisable.
 
 ### Fase 9 — Vistas adicionales opcionales
 
-- [ ] Agregar páginas de capacidades.
-- [ ] Agregar matrices de responsabilidades.
-- [ ] Agregar estado de migraciones.
-- [ ] Agregar análisis de impacto solicitados.
-- [ ] Mantener intactas las vistas actuales.
+- [x] Agregar páginas de capacidades.
+- [x] Agregar matrices de responsabilidades.
+- [x] Agregar estado de migraciones.
+- [x] Agregar análisis de impacto solicitados.
+- [x] Mantener intactas las vistas actuales.
+
+### Evidencia de cierre
+
+- run real: `run-2026-09-23T22-32-27-435Z-gr`;
+- índice v6: 17.083 chunks, 94.262 relaciones y 73 capacidades;
+- segunda indexación: 17.079 chunks reutilizados, 4 nuevos (las vistas derivadas) y 0 lecturas del repositorio;
+- medición de la segunda indexación: 55.869 ms y 190.661.560 bytes de incremento de heap;
+- caso vertical: los nueve símbolos requeridos recuperados en 3.061 tokens, 27 chunks y 15 documentos, sin información faltante;
+- investigación limitada: 246 hechos, 20 evidencias autorizadas, 0 lecturas directas y sin exploración amplia;
+- documentación publicada: 0 referencias a fuentes de test y 0 incidencias bloqueantes;
+- calidad: typecheck, build, 59/59 pruebas y smoke MCP de 23 herramientas superados.
 
 ## 16. Caso vertical de aceptación
 

@@ -31,4 +31,4 @@ Las pruebas del motor y del servidor MCP ya fueron autorizadas. La demo, Copilot
 
 ## Estado de pruebas
 
-La suite disponible pasa 52/52. El transporte MCP y sus once herramientas, AST TypeScript/Java, Spring anotado, WebFlux funcional, Reactor, resolución de llamadas e inyección, árbol físico, sincronización incremental sobre Git sintético y Mermaid vertical fueron comprobados en Windows. Sigue pendiente la aceptación exhaustiva P01–P112/N01–N16, especialistas instrumentados, Archify externo, Linux/macOS y, solo si se activa expresamente, Azure.
+La suite disponible pasa 59/59. El transporte MCP y sus 23 herramientas, AST TypeScript/Java, Spring anotado, WebFlux funcional, Reactor, inteligencia documental, contexto presupuestado, análisis/propuestas, árbol físico, sincronización incremental y Mermaid vertical fueron comprobados en Windows. Sigue pendiente la aceptación exhaustiva P01–P112/N01–N16, Archify externo, Linux/macOS y, sólo si se activa expresamente, Azure.

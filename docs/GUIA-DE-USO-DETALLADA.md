@@ -399,12 +399,22 @@ Herramientas MCP disponibles:
 - `docsys_query`: hechos ya extraídos.
 - `docsys_explain_service`: resumen compacto precalculado de tecnologías, endpoints, relaciones, clases y métodos de un servicio; úsalo antes de pedir hechos crudos.
 - `docsys_explain_endpoint`: flujo compacto de un endpoint con handler, llamadas entre métodos, datos e integraciones; no reanaliza el repositorio.
-- `docsys_prepare_proposal`: borrador pendiente de revisión.
+- `docsys_search_documentation`: busca secciones por término, endpoint, símbolo o repositorio.
+- `docsys_expand_document_context`: expande fragmentos por relaciones técnicas sin leer fuentes.
+- `docsys_prepare_analysis_context`: compila un contexto acotado para desarrollo, migración, impacto o responsabilidades.
+- `docsys_locate_capability`: localiza una capacidad, sus contratos y sistemas participantes.
+- `docsys_trace_business_flow`: reconstruye el recorrido de negocio documentado.
+- `docsys_explain_responsibilities`: separa responsabilidades extraídas y decisiones explícitas.
+- `docsys_analyze_change`: calcula alcance, complejidad, criticidad, riesgos y confianza.
+- `docsys_assess_migration`: evalúa origen, destino, dependencias heredadas, fases y rollback.
+- `docsys_investigate_flow`: reutiliza hechos indexados con límites de archivos, bytes y profundidad, sin escaneo general.
+- `docsys_read_source_evidence`: lee únicamente un fragmento productivo autorizado por `evidence_id`, valida su hash, redacta secretos y audita la lectura.
+- `docsys_prepare_proposal`: borrador pendiente de revisión que puede consumir `context_id`, `capability_id` y `analysis_id`.
 - `docsys_prepare_documentation`: genera fichas, clases/métodos, diagramas de servicio, un Mermaid por endpoint y mapas de relaciones; luego publica automáticamente la edición final en `Actual`.
 
 No existen herramientas MCP separadas para aprobar o publicar: la publicación forma parte de `docsys_prepare_documentation`.
 
-Para reducir créditos, formule primero la pregunta con `docsys_explain_service` o `docsys_explain_endpoint`. Estas herramientas entregan solo el subgrafo necesario; `docsys_query` con límites altos debe reservarse para auditorías o detalles que no aparezcan en la explicación compacta.
+Para analizar un desarrollo con bajo costo, use `docsys_search_documentation` y `docsys_prepare_analysis_context`, ejecute la herramienta analítica necesaria y entregue ese contexto a `docsys_prepare_proposal`. Si faltan datos, amplíe primero la documentación, después use `docsys_investigate_flow` y sólo lea fuente por un `evidence_id` concreto. Nunca use una búsqueda general del repositorio como fallback.
 
 ### Archify y los diagramas
 
@@ -434,7 +444,7 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 
 ## 15. Lo que sigue pendiente antes de usarlo como validado
 
-- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 46/46.
+- Completar la campaña exhaustiva P01–P112/N01–N16; la suite disponible pasa 59/59.
 - Autorizar la demo sintética si se desea ejecutarla.
 - Verificar VS Code, Copilot CLI e IntelliJ con sus versiones instaladas.
 - Instalar/configurar Copilot CLI y autorizar cualquier llamada real a los especialistas.
@@ -443,4 +453,4 @@ Usa el run <id> y prepara un plan para extraer facturación de core hacia un ser
 - Verificar Windows, Linux y macOS.
 - Activar Azure solamente si se decide usarlo.
 
-Estado actual: **motor, MCP, extracción arquitectónica y publicación Obsidian probados en Windows; agentes interpretativos, Archify externo y validación completa pendientes**.
+Estado actual: **motor, MCP, extracción arquitectónica, inteligencia documental y publicación Obsidian probados en Windows; Archify externo, Azure y validación multiplataforma permanecen pendientes**.

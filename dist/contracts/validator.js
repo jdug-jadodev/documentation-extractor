@@ -2,7 +2,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 const SCHEMA_FILES = [
-    "config", "snapshot", "evidence", "fact", "bundle", "graph", "task-packet", "agent-result", "document", "review", "approval", "publication", "run",
+    "config", "snapshot", "evidence", "fact", "bundle", "graph", "task-packet", "agent-result", "document", "review", "approval", "publication", "proposal", "run",
 ];
 export class ContractValidationError extends Error {
     schema;

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { AgentResult, Evidence, Fact, Snapshot } from "./types.js";
 
 const SCHEMA_FILES = [
-  "config", "snapshot", "evidence", "fact", "bundle", "graph", "task-packet", "agent-result", "document", "review", "approval", "publication", "run",
+  "config", "snapshot", "evidence", "fact", "bundle", "graph", "task-packet", "agent-result", "document", "review", "approval", "publication", "proposal", "run",
 ] as const;
 
 export type SchemaName = typeof SCHEMA_FILES[number];

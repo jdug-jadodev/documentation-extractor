@@ -12,6 +12,26 @@ export interface KnowledgeConfiguration {
     vault_path: string;
     state_path?: string;
     repositories: RepositoryConfiguration[];
+    documentation?: {
+        include_tests: false;
+    };
+    documentation_intelligence?: {
+        enabled: boolean;
+        max_context_tokens: number;
+        max_documents: number;
+        max_flows: number;
+        max_symbols: number;
+        max_documents_per_repository: number;
+        include_tests_by_default: false;
+    };
+    investigation?: {
+        max_dependency_depth: number;
+        default_max_files: number;
+        hard_max_files: number;
+        default_max_bytes: number;
+        hard_max_bytes: number;
+        allow_repository_wide_scan: false;
+    };
     ai: {
         provider: "copilot-cli";
         model: string | null;

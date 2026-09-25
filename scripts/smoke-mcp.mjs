@@ -52,7 +52,7 @@ async function main() {
     const status = await request("tools/call", { name: "docsys_status", arguments: {} });
     const repositories = await request("tools/call", { name: "docsys_list_repositories", arguments: {} });
     const names = listed.tools.map((tool) => tool.name).sort();
-    const required = ["docsys_document_flow", "docsys_explain_endpoint", "docsys_explain_relation", "docsys_explain_service", "docsys_find_flows", "docsys_list_repositories", "docsys_prepare_analysis", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_refresh_knowledge", "docsys_status", "docsys_trace_flow"].sort();
+    const required = ["docsys_analyze_change", "docsys_assess_migration", "docsys_document_flow", "docsys_expand_document_context", "docsys_explain_endpoint", "docsys_explain_relation", "docsys_explain_responsibilities", "docsys_explain_service", "docsys_find_flows", "docsys_investigate_flow", "docsys_list_repositories", "docsys_locate_capability", "docsys_prepare_analysis", "docsys_prepare_analysis_context", "docsys_prepare_documentation", "docsys_prepare_proposal", "docsys_query", "docsys_read_source_evidence", "docsys_refresh_knowledge", "docsys_search_documentation", "docsys_status", "docsys_trace_business_flow", "docsys_trace_flow"].sort();
     if (JSON.stringify(names) !== JSON.stringify(required)) throw new Error(`Superficie MCP inesperada: ${names.join(", ")}`);
     if (status.isError || repositories.isError) throw new Error("Las consultas MCP de solo lectura devolvieron error.");
     const statusValue = status.structuredContent;

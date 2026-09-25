@@ -41,7 +41,7 @@ export async function runCli(argv: string[], options: CliOptions = {}): Promise<
     else if (command === "relacion") result = await relation(configPath, validator, parsed.values);
     else if (command === "flujo") result = await flow(configPath, validator, parsed.values);
     else if (command === "comparar") result = await compare(configPath, validator, parsed.values);
-    else if (command === "proponer") result = await propose(configPath, validator, parsed.values);
+    else if (command === "proponer") result = await propose(packageRoot, configPath, validator, parsed.values);
     else if (command === "demo") result = await runDemo(packageRoot, validator);
     else if (command === "migrar") result = await migrate(packageRoot, configPath, validator, parsed.values);
     else if (command === "revertir-migracion") result = await revertMigration(configPath, parsed.values);
@@ -94,7 +94,7 @@ async function interactiveMenu(packageRoot: string, validator: ContractValidator
     if (action === "update-one" || action === "update-many") result = await update(packageRoot, configPath, validator, values);
     else if (action === "relation") result = await relation(configPath, validator, values);
     else if (action === "flow") result = await flow(configPath, validator, values);
-    else if (action === "proposal") result = await propose(configPath, validator, values);
+    else if (action === "proposal") result = await propose(packageRoot, configPath, validator, values);
     else if (action === "query") result = await queryRun(configPath, validator, String(values.categoria ?? "endpoints"), values);
     else result = await documentRun(packageRoot, configPath, validator, requiredString(values.run, "run"));
     emit(result, false);
@@ -145,7 +145,7 @@ async function synchronizeKnowledge(packageRoot: string, configPath: string, val
 async function relation(configPath: string, validator: ContractValidator, values: Record<string, unknown>) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return explainRelations(artifacts.graph, runId, optionalString(values.desde), optionalString(values.hasta)); }
 async function flow(configPath: string, validator: ContractValidator, values: Record<string, unknown>) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return traceFlow(artifacts.graph, runId, requiredString(values.desde, "--desde"), requiredString(values.hasta, "--hasta")); }
 async function compare(configPath: string, validator: ContractValidator, values: Record<string, unknown>) { const config = await loadConfiguration(configPath, validator); return await compareRuns(config, requiredString(values.base, "--base (run base)"), requiredString(values.run, "--run (run objetivo)"), optionalString(values.repo)); }
-async function propose(configPath: string, validator: ContractValidator, values: Record<string, unknown>) { if (values.ia === true) throw Object.assign(new Error("La IA no está autorizada para esta ejecución; omita --ia para generar el borrador determinista."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator); return await prepareProposal(config, requiredString(values.run, "--run"), requiredString(values.tipo, "--tipo") as ProposalType, requiredString(values.solicitud, "--solicitud"), Array.isArray(values.requisito) ? values.requisito.map(String) : []); }
+async function propose(packageRoot: string, configPath: string, validator: ContractValidator, values: Record<string, unknown>) { if (values.ia === true) throw Object.assign(new Error("La IA no está autorizada para esta ejecución; omita --ia para generar el borrador determinista."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator); return await prepareProposal(config, requiredString(values.run, "--run"), requiredString(values.tipo, "--tipo") as ProposalType, requiredString(values.solicitud, "--solicitud"), Array.isArray(values.requisito) ? values.requisito.map(String) : [], { packageRoot, validator }); }
 async function migrate(packageRoot: string, configPath: string, validator: ContractValidator, values: Record<string, unknown>) {
   const source = resolve(requiredString(values.origen, "--origen"));
   const plan = await planLegacyMigration(source);

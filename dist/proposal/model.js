@@ -6,10 +6,11 @@ export function createProposal(input) {
         affected.add(edge.from);
         affected.add(edge.to);
     }
-    const base = { schema_version: 3, proposal_type: input.type, status: "review_required", current_state: input.findings.map((finding) => finding.statement), proposed_changes: [...input.requestedChanges], affected_components: [...affected], requirements: [...(input.humanRequirements ?? [])], contracts: input.graph.edges.map((edge) => `${edge.type}: ${edge.from} -> ${edge.to} (${edge.status})`), phases: [], acceptance_criteria: [], tests: [], risks: input.graph.edges.flatMap((edge) => edge.limitations), rollback: [], alternatives: [], pending_decisions: [], evidence_ids: [...new Set(usedEvidence)] };
+    const base = { schema_version: 3, proposal_type: input.type, status: "review_required", objective: input.requestedChanges.join(" "), scope: [], exclusions: ["No modifica repositorios ni aprueba decisiones arquitectónicas."], current_state: input.findings.map((finding) => finding.statement), current_flow: [], target_flow: [], proposed_changes: [...input.requestedChanges], affected_components: [...affected], changes_by_repository: [], responsibilities: [], requirements: [...(input.humanRequirements ?? [])], contracts: input.graph.edges.map((edge) => `${edge.type}: ${edge.from} -> ${edge.to} (${edge.status})`), data_and_ownership: [], reactive_behavior: [], phases: [], deployment_order: [], acceptance_criteria: [], validation: [], tests: [], risks: input.graph.edges.flatMap((edge) => edge.limitations), rollback: [], alternatives: [], pending_decisions: [], documentary_evidence: [], evidence_ids: [...new Set(usedEvidence)], confidence: usedEvidence.length > 0 ? "medium" : "low", facts: input.findings.filter((finding) => finding.classification === "fact").map((finding) => finding.statement), inferences: input.findings.filter((finding) => finding.classification === "inference").map((finding) => finding.statement), decisions: [...(input.humanRequirements ?? [])] };
     if (input.type === "specification") {
         base.acceptance_criteria.push("Criterios verificables pendientes de validación humana para cada requisito.");
         base.tests.push("Casos positivos, negativos y límites derivados de los criterios aprobados.");
+        base.validation.push("Validar contratos, comportamiento funcional y regresión de consumidores observados.");
     }
     if (input.type === "migration") {
         const edgeTypes = new Set(input.graph.edges.map((edge) => edge.type));
@@ -24,12 +25,14 @@ export function createProposal(input) {
             base.tests.push("Pruebas de producción y consumo para cada recurso de mensajería observado que resulte afectado.");
         base.tests.push("Prueba controlada de transición y prueba de rollback antes de autorizar el retiro de la implementación anterior.");
         base.rollback.push("Restaurar la versión anterior conservando datos y contratos compatibles.");
+        base.deployment_order.push("Desplegar compatibilidad", "Desplegar destino", "Migrar consumidores", "Retirar origen sólo después de aprobación");
         base.alternatives.push("Mantener el estado actual", "Realizar una transición gradual conservando temporalmente la implementación anterior");
         base.pending_decisions.push("Confirmar el alcance exacto de responsabilidades y contratos que se trasladarán.", "Definir criterios medibles de entrada, salida y retiro para cada fase.", "Aprobar responsables, ventanas y mecanismos concretos únicamente cuando exista evidencia suficiente.", ...uncertainEdges.map((edge) => `Resolver ${edge.id} (${edge.status}): ${edge.from} ${edge.type} ${edge.to}.`));
     }
     if (input.type === "adr") {
         base.alternatives.push("Mantener el estado actual", "Aplicar la decisión propuesta de forma reversible");
         base.pending_decisions.push("Aprobación del equipo propietario y revisión de consecuencias.");
+        base.validation.push("Revisar la decisión con propietarios técnicos y funcionales.");
     }
     base.tests = unique(base.tests);
     base.risks = unique(base.risks);

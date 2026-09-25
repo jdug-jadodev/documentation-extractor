@@ -43,7 +43,7 @@ export async function runCli(argv, options = {}) {
         else if (command === "comparar")
             result = await compare(configPath, validator, parsed.values);
         else if (command === "proponer")
-            result = await propose(configPath, validator, parsed.values);
+            result = await propose(packageRoot, configPath, validator, parsed.values);
         else if (command === "demo")
             result = await runDemo(packageRoot, validator);
         else if (command === "migrar")
@@ -127,7 +127,7 @@ async function interactiveMenu(packageRoot, validator) {
         else if (action === "flow")
             result = await flow(configPath, validator, values);
         else if (action === "proposal")
-            result = await propose(configPath, validator, values);
+            result = await propose(packageRoot, configPath, validator, values);
         else if (action === "query")
             result = await queryRun(configPath, validator, String(values.categoria ?? "endpoints"), values);
         else
@@ -185,8 +185,8 @@ async function synchronizeKnowledge(packageRoot, configPath, validator, values) 
 async function relation(configPath, validator, values) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return explainRelations(artifacts.graph, runId, optionalString(values.desde), optionalString(values.hasta)); }
 async function flow(configPath, validator, values) { const config = await loadConfiguration(configPath, validator); const runId = requiredString(values.run, "--run"); const artifacts = await loadRunArtifacts(config, runId); return traceFlow(artifacts.graph, runId, requiredString(values.desde, "--desde"), requiredString(values.hasta, "--hasta")); }
 async function compare(configPath, validator, values) { const config = await loadConfiguration(configPath, validator); return await compareRuns(config, requiredString(values.base, "--base (run base)"), requiredString(values.run, "--run (run objetivo)"), optionalString(values.repo)); }
-async function propose(configPath, validator, values) { if (values.ia === true)
-    throw Object.assign(new Error("La IA no está autorizada para esta ejecución; omita --ia para generar el borrador determinista."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator); return await prepareProposal(config, requiredString(values.run, "--run"), requiredString(values.tipo, "--tipo"), requiredString(values.solicitud, "--solicitud"), Array.isArray(values.requisito) ? values.requisito.map(String) : []); }
+async function propose(packageRoot, configPath, validator, values) { if (values.ia === true)
+    throw Object.assign(new Error("La IA no está autorizada para esta ejecución; omita --ia para generar el borrador determinista."), { exitCode: 3 }); const config = await loadConfiguration(configPath, validator); return await prepareProposal(config, requiredString(values.run, "--run"), requiredString(values.tipo, "--tipo"), requiredString(values.solicitud, "--solicitud"), Array.isArray(values.requisito) ? values.requisito.map(String) : [], { packageRoot, validator }); }
 async function migrate(packageRoot, configPath, validator, values) {
     const source = resolve(requiredString(values.origen, "--origen"));
     const plan = await planLegacyMigration(source);

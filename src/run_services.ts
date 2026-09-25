@@ -1,14 +1,15 @@
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { access, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { DocumentModel, Evidence, Fact, Finding, GraphEdge, GraphNode, Inventory, KnowledgeGraph, PublicationManifest, Scenario, Snapshot } from "./contracts/types.js";
 import type { EffectiveConfiguration } from "./config.js";
+import type { ContractValidator } from "./contracts/validator.js";
 import { compareFacts, type FactDiff } from "./compare.js";
 import { createProposal, type ProposalModel, type ProposalType } from "./proposal/model.js";
 import { atomicWrite } from "./platform/fs.js";
-import { stableId } from "./platform/hash.js";
+import { sha256, stableId } from "./platform/hash.js";
 import { queryFacts, renderFactTable, type QueryCategory } from "./query.js";
 import { createDocumentModel, resolveEndpointFacts } from "./documentation/model.js";
-import { graphForFacts, productionFacts } from "./documentation/source_scope.js";
+import { graphForFacts, isTestSourcePath, productionFacts } from "./documentation/source_scope.js";
 import { renderDocument } from "./documentation/render.js";
 import { buildCandidateVault, renderScopedFlowDocumentation, type RepositoryProfileOverride, type RepositoryProfileOverrides } from "./obsidian/vault.js";
 import { validateDocument } from "./review/validators.js";
@@ -18,6 +19,11 @@ import { LocalPublicationTarget } from "./publication/local.js";
 import { createPublicationManifest } from "./publication/manifest.js";
 import { buildGraph } from "./correlation/graph.js";
 import { assertNoKnownSecret, redactValue } from "./security/redaction.js";
+import { buildDocumentationIntelligence } from "./intelligence/index.js";
+import { expandDocumentContext, loadContext, prepareAnalysisContext, searchDocumentation } from "./intelligence/retrieval.js";
+import { analyzeChange, assessMigration, explainResponsibilities, investigationDecision, locateCapability, traceBusinessFlow } from "./intelligence/analysis.js";
+import type { AnalysisIntent, Capability } from "./intelligence/types.js";
+import { isContainedPath } from "./platform/paths.js";
 
 export interface RunArtifacts {
   run_id: string;
@@ -75,6 +81,103 @@ export async function prepareFlowDocumentation(config: EffectiveConfiguration, r
   return { schema_version: 3, status: "generated", scope: "single_flow", run_id: runId, component, method: document.method, path: document.path, handler: document.handler, source_path: document.source_path, markdown_path: output, repository_reads: 0, ai_invocations: 0 };
 }
 
+export async function searchRunDocumentation(packageRoot: string, config: EffectiveConfiguration, runId: string, query: string, repository?: string, limit?: number) {
+  const artifacts = await ensureDocumentationIntelligence(packageRoot, config, runId);
+  return await searchDocumentation(artifacts.root, query, { ...(repository === undefined ? {} : { repository }), ...(limit === undefined ? {} : { limit }) });
+}
+
+export async function expandRunDocumentContext(packageRoot: string, config: EffectiveConfiguration, runId: string, chunkIds: readonly string[], depth?: number, limit?: number) {
+  const artifacts = await ensureDocumentationIntelligence(packageRoot, config, runId);
+  return await expandDocumentContext(artifacts.root, chunkIds, depth, limit);
+}
+
+export async function prepareRunAnalysisContext(packageRoot: string, config: EffectiveConfiguration, runId: string, query: string, intent: AnalysisIntent, repository?: string) {
+  const artifacts = await ensureDocumentationIntelligence(packageRoot, config, runId);
+  const configured = config.documentation_intelligence;
+  const budget = configured === undefined ? undefined : { max_context_tokens: configured.max_context_tokens, max_documents: configured.max_documents, max_flows: configured.max_flows, max_symbols: configured.max_symbols, max_documents_per_repository: configured.max_documents_per_repository };
+  return await prepareAnalysisContext({ runId, runRoot: artifacts.root, query, intent, ...(repository === undefined ? {} : { repository }), ...(budget === undefined ? {} : { budget }) });
+}
+
+export async function locateRunCapability(packageRoot: string, config: EffectiveConfiguration, runId: string, query: string) {
+  const artifacts = await ensureDocumentationIntelligence(packageRoot, config, runId);
+  return await locateCapability(artifacts.root, query);
+}
+
+export async function traceRunBusinessFlow(packageRoot: string, config: EffectiveConfiguration, runId: string, query: string) {
+  const artifacts = await ensureDocumentationIntelligence(packageRoot, config, runId);
+  return await traceBusinessFlow(artifacts.root, query);
+}
+
+export async function explainRunResponsibilities(packageRoot: string, config: EffectiveConfiguration, runId: string, query: string) {
+  const artifacts = await ensureDocumentationIntelligence(packageRoot, config, runId);
+  return await explainResponsibilities(artifacts.root, query);
+}
+
+export async function analyzeRunChange(packageRoot: string, config: EffectiveConfiguration, runId: string, request: string, contextId?: string) {
+  const run = await ensureDocumentationIntelligence(packageRoot, config, runId), artifacts = await loadWorkspaceArtifacts(config, runId);
+  const result = await analyzeChange({ runId, runRoot: run.root, request, facts: productionFacts(artifacts.facts), graph: graphForFacts(artifacts.graph, productionFacts(artifacts.facts)), ...(contextId === undefined ? {} : { contextId }) });
+  await atomicWrite(join(run.root, "documentation-intelligence", "analyses", `${result.analysis_id}.json`), `${JSON.stringify(result, null, 2)}\n`);
+  return result;
+}
+
+export async function assessRunMigration(packageRoot: string, config: EffectiveConfiguration, runId: string, request: string, options: { contextId?: string; from?: string; to?: string } = {}) {
+  const run = await ensureDocumentationIntelligence(packageRoot, config, runId), artifacts = await loadWorkspaceArtifacts(config, runId);
+  const result = await assessMigration({ runId, runRoot: run.root, request, facts: productionFacts(artifacts.facts), graph: graphForFacts(artifacts.graph, productionFacts(artifacts.facts)), ...(options.contextId === undefined ? {} : { contextId: options.contextId }), ...(options.from === undefined ? {} : { from: options.from }), ...(options.to === undefined ? {} : { to: options.to }) });
+  await atomicWrite(join(run.root, "documentation-intelligence", "migrations", `${result.migration_id}.json`), `${JSON.stringify(result, null, 2)}\n`);
+  return result;
+}
+
+export async function investigateRunFlow(packageRoot: string, config: EffectiveConfiguration, runId: string, query: string, level = 1) {
+  const context = await prepareRunAnalysisContext(packageRoot, config, runId, query, "development"), artifacts = await loadWorkspaceArtifacts(config, runId);
+  const escalation = investigationDecision(context, level), limits = config.investigation ?? { max_dependency_depth: 3, default_max_files: 8, hard_max_files: 20, default_max_bytes: 262_144, hard_max_bytes: 1_048_576, allow_repository_wide_scan: false };
+  const selectedPaths = [...new Set(context.chunks.flatMap((chunk) => chunk.source_paths).filter((path) => !isTestSourcePath(path)))].slice(0, limits.default_max_files);
+  const selectedPathSet = new Set(selectedPaths), contextEvidence = new Set(context.chunks.flatMap((chunk) => chunk.evidence_ids));
+  const directedFacts = productionFacts(artifacts.facts).filter((fact) => {
+    const value = asObject(fact.value), source = typeof value.source_path === "string" ? value.source_path : null, target = typeof value.target_path === "string" ? value.target_path : null;
+    return (source !== null && selectedPathSet.has(source)) || (target !== null && selectedPathSet.has(target)) || fact.evidence_ids.some((id) => contextEvidence.has(id));
+  });
+  const authorizedEvidence = artifacts.evidence.filter((item) => !isTestSourcePath(item.relative_path) && (selectedPathSet.has(item.relative_path) || contextEvidence.has(item.id))).slice(0, limits.hard_max_files).map((item) => ({ evidence_id: item.id, repository_id: item.repository_id, source_path: item.relative_path, locator: item.locator }));
+  const restrictedAgentHandoff = level >= 5 ? { question: query, context_id: context.context_id, missing_information: context.missing_information, authorized_evidence: authorizedEvidence, budget: { max_dependency_depth: limits.max_dependency_depth, max_files: limits.default_max_files, max_bytes: limits.default_max_bytes }, tools: [], repository_wide_scan: false } : null;
+  return { schema_version: 3, run_id: runId, query, context, escalation, directed_analysis: { mode: "indexed_facts", source_paths: selectedPaths, fact_ids: directedFacts.map((fact) => fact.id), evidence_ids: [...new Set(directedFacts.flatMap((fact) => fact.evidence_ids))], max_dependency_depth: limits.max_dependency_depth }, authorized_evidence: authorizedEvidence, restricted_agent_handoff: restrictedAgentHandoff, repository_wide_scan: false, repository_reads: 0, bytes_read: 0 };
+}
+
+export async function readRunSourceEvidence(config: EffectiveConfiguration, runId: string, evidenceId: string, maxBytes = 65_536) {
+  const artifacts = await loadWorkspaceArtifacts(config, runId), evidence = artifacts.evidence.find((item) => item.id === evidenceId);
+  if (evidence === undefined) throw new Error(`Evidencia no encontrada: ${evidenceId}.`);
+  if (isTestSourcePath(evidence.relative_path)) throw new Error("La evidencia pertenece a pruebas y no está autorizada por defecto.");
+  const repository = config.repositories.find((item) => item.id === evidence.repository_id);
+  if (repository === undefined) throw new Error(`Repositorio no configurado para la evidencia: ${evidence.repository_id}.`);
+  const path = resolve(repository.root, evidence.relative_path);
+  if (!isContainedPath(repository.root, path)) throw new Error("La evidencia intenta salir del repositorio autorizado.");
+  const auditPath = join(validatedRunRoot(config.state_root, runId), "documentation-intelligence", "source-read-audit.jsonl"), previous = await readFile(auditPath, "utf8").catch(() => "");
+  const previousReads = previous.split(/\r?\n/u).filter(Boolean).flatMap((line) => { try { return [JSON.parse(line) as { evidence_id?: string; bytes?: number }]; } catch { return []; } });
+  const configuredHardFiles = config.investigation?.hard_max_files ?? 20, configuredHardBytes = config.investigation?.hard_max_bytes ?? 1_048_576;
+  if (!previousReads.some((item) => item.evidence_id === evidenceId) && new Set(previousReads.map((item) => item.evidence_id).filter(Boolean)).size >= configuredHardFiles) throw new Error(`El run alcanzó el límite de ${configuredHardFiles} archivos de evidencia.`);
+  const info = await stat(path);
+  const hardMax = Math.min(Math.max(maxBytes, 1), configuredHardBytes);
+  if (!info.isFile() || info.size > hardMax) throw new Error(`La fuente excede el presupuesto autorizado de ${hardMax} bytes.`);
+  const data = await readFile(path);
+  if (sha256(data) !== evidence.source_hash) throw new Error("La fuente cambió desde el run; cree un run nuevo antes de leer evidencia.");
+  const text = data.toString("utf8"), lines = text.split(/\r?\n/u);
+  const start = evidence.locator.kind === "lines" ? Math.max(1, evidence.locator.start ?? 1) : 1;
+  const end = evidence.locator.kind === "lines" ? Math.min(lines.length, evidence.locator.end ?? start) : Math.min(lines.length, start + 120);
+  const fragment = lines.slice(start - 1, end).join("\n");
+  const redacted = String(redactValue(fragment));
+  assertNoKnownSecret(redacted);
+  const readBytes = Buffer.byteLength(redacted), accumulatedBytes = previousReads.reduce((total, item) => total + (typeof item.bytes === "number" ? item.bytes : 0), 0);
+  if (accumulatedBytes + readBytes > configuredHardBytes) throw new Error(`El run excedería el límite acumulado de ${configuredHardBytes} bytes de evidencia.`);
+  const audit = { read_at: new Date().toISOString(), run_id: runId, evidence_id: evidenceId, repository_id: evidence.repository_id, source_path: evidence.relative_path, start_line: start, end_line: end, bytes: readBytes, reason: "evidencia solicitada explícitamente", conclusion: "fragmento entregado; conclusión pendiente de síntesis", secrets_redacted: redacted !== fragment };
+  await atomicWrite(auditPath, `${previous}${JSON.stringify(audit)}\n`);
+  return { schema_version: 3, ...audit, content: redacted, repository_wide_scan: false };
+}
+
+async function ensureDocumentationIntelligence(packageRoot: string, config: EffectiveConfiguration, runId: string): Promise<{ root: string }> {
+  const root = validatedRunRoot(config.state_root, runId);
+  try { await access(join(root, "documentation-intelligence", "manifest.json")); }
+  catch { await prepareRunDocumentation(packageRoot, config, runId); }
+  return { root };
+}
+
 function searchTokens(value: string): string[] {
   const stop = new Set(["de", "del", "el", "la", "los", "las", "para", "flujo"]);
   const normalized = value.normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").toLocaleLowerCase("en-US");
@@ -106,11 +209,13 @@ export async function prepareRunDocumentation(packageRoot: string, config: Effec
   await rm(candidate, { recursive: true, force: true });
   await buildCandidateVault(candidate, model, documentedGraph, serviceModels, documentedFacts, repositoryProfileOverrides(config.overrides));
   await atomicWrite(join(candidate, "fuentes-conocimiento.json"), `${JSON.stringify(catalog, null, 2)}\n`);
+  const intelligence = await buildDocumentationIntelligence({ runId, runRoot: artifacts.root, vaultRoot: candidate, snapshots: artifacts.snapshots, facts: documentedFacts, graph: documentedGraph, ...(config.overrides === undefined ? {} : { overrides: config.overrides }) });
+  await renderIntelligenceViews(candidate, intelligence.capabilities);
   const rendered = renderDocument(model);
   const issues = validateDocument(model, { facts: documentedFacts, evidence: artifacts.evidence, graph: documentedGraph, rendered });
   await atomicWrite(join(artifacts.root, "document-model.json"), `${JSON.stringify(model, null, 2)}\n`);
   await atomicWrite(join(artifacts.root, "review.json"), `${JSON.stringify({ schema_version: 3, run_id: runId, issues, unresolved_questions: [], status: issues.some((item) => item.severity === "error" || item.severity === "security") ? "review_required" : "review", archify: { skill_status: skill.status, mode: skill.mode, sha256: skill.sha256, implementation: skill.implementation } }, null, 2)}\n`);
-  return { status: "review" as const, run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, repository_sources: catalog.repositories, knowledge_catalog: catalog, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
+  return { status: "review" as const, run_id: runId, candidate_vault: candidate, issues: issues.length, blocking_issues: issues.filter((item) => item.severity === "error" || item.severity === "security").length, model_status: model.status, repository_count: artifacts.snapshots.length, repository_sources: catalog.repositories, knowledge_catalog: catalog, documentation_intelligence: { chunks: intelligence.manifest.chunks, reused_chunks: intelligence.manifest.reused_chunks, capabilities: intelligence.capabilities.length, root: intelligence.root }, archify: { skill_status: skill.status, mode: skill.mode, external_implementation: skill.implementation } };
 }
 
 /** Loads the requested run together with the latest published knowledge for repositories not present in it. */
@@ -305,24 +410,44 @@ export async function compareRuns(config: EffectiveConfiguration, baseRunId: str
   return { schema_version: 3, base_run_id: baseRunId, target_run_id: targetRunId, repository_id: repositoryId ?? null, complete, diff: compareFacts(selectedBase, selectedTarget, complete) };
 }
 
-export async function prepareProposal(config: EffectiveConfiguration, runId: string, type: ProposalType, request: string, humanRequirements: string[] = []): Promise<{ proposal_id: string; status: "review_required"; json_path: string; markdown_path: string; proposal: ProposalModel }> {
+export async function prepareProposal(config: EffectiveConfiguration, runId: string, type: ProposalType, request: string, humanRequirements: string[] = [], options: { packageRoot?: string; contextId?: string; capabilityId?: string; analysisId?: string; validator?: ContractValidator } = {}): Promise<{ proposal_id: string; status: "review_required"; json_path: string; markdown_path: string; proposal: ProposalModel; context_id: string }> {
   if (!["specification", "migration", "adr"].includes(type)) throw new Error(`Tipo de propuesta no soportado: ${type}`);
   if (request.trim() === "") throw new Error("La solicitud de propuesta está vacía.");
-  const artifacts = await loadRunArtifacts(config, runId);
+  const artifacts = await loadWorkspaceArtifacts(config, runId);
   const findings = findingsFromGraph(artifacts.graph);
   const proposal = createProposal({ type, findings, graph: artifacts.graph, evidence: artifacts.evidence, requestedChanges: [request.trim()], humanRequirements });
-  const proposalId = proposalIdentifier(runId, type, request, humanRequirements);
+  if (options.packageRoot !== undefined) await ensureDocumentationIntelligence(options.packageRoot, config, runId);
+  const context = options.contextId === undefined ? await prepareAnalysisContext({ runId, runRoot: artifacts.root, query: request, intent: type === "migration" ? "migration" : "development" }) : await loadContext(artifacts.root, options.contextId);
+  const located = await locateCapability(artifacts.root, options.capabilityId ?? request);
+  const capability = options.capabilityId === undefined ? located.matches[0]?.capability : located.matches.find((item) => item.capability.id === options.capabilityId)?.capability;
+  proposal.scope = [...new Set(context.chunks.map((chunk) => chunk.repository_id).filter((id) => id !== "_workspace"))];
+  proposal.current_flow = context.chunks.filter((chunk) => chunk.document_type === "flow").map((chunk) => `${chunk.repository_id}: ${chunk.heading ?? chunk.document_path}`);
+  proposal.target_flow = proposal.current_flow.length > 0 ? proposal.current_flow.map((flow) => `${flow} → aplicar cambio solicitado conservando contratos observados`) : ["Flujo objetivo pendiente de confirmar con evidencia adicional."];
+  proposal.changes_by_repository = proposal.scope.map((repositoryId) => ({ repository_id: repositoryId, changes: [`Evaluar e implementar en ${repositoryId} únicamente los cambios respaldados por el contexto.`], document_paths: [...new Set(context.chunks.filter((chunk) => chunk.repository_id === repositoryId).map((chunk) => chunk.document_path))] }));
+  proposal.responsibilities = capability?.responsibilities.map((item) => ({ repository_id: item.repository_id, role: item.role, basis: item.basis })) ?? proposal.scope.map((repository_id) => ({ repository_id, role: "participante técnico observado", basis: "inferred" as const }));
+  proposal.contracts = [...new Set([...proposal.contracts, ...context.chunks.flatMap((chunk) => chunk.endpoint === null ? [] : [`${chunk.endpoint.method} ${chunk.endpoint.path}`])])];
+  proposal.data_and_ownership = context.chunks.filter((chunk) => /data|repository|persist|entity/iu.test(`${chunk.section_type} ${chunk.roles.join(" ")} ${chunk.source_paths.join(" ")}`)).map((chunk) => `${chunk.repository_id}: ${chunk.heading ?? chunk.document_path}`);
+  proposal.reactive_behavior = [...new Set(context.chunks.flatMap((chunk) => [...chunk.content.matchAll(/\b(map|flatMap|filter|collectList|onErrorResume|switchIfEmpty|zip|then)\b/gu)].map((match) => match[1]!)))];
+  proposal.documentary_evidence = context.chunks.map((chunk) => ({ chunk_id: chunk.id, document_path: chunk.document_path, evidence_ids: chunk.evidence_ids }));
+  proposal.evidence_ids = [...new Set([...proposal.evidence_ids, ...context.chunks.flatMap((chunk) => chunk.evidence_ids)])];
+  proposal.pending_decisions = [...new Set([...proposal.pending_decisions, ...context.missing_information.map((item) => `Confirmar ${item}.`)])];
+  proposal.confidence = proposal.evidence_ids.length >= 5 && context.statistics.unresolved_relations === 0 ? "high" : proposal.evidence_ids.length > 0 ? "medium" : "low";
+  proposal.validation = [...new Set([...proposal.validation, "Validar cada cambio contra los documentos y evidence_ids citados.", "Revisar manualmente relaciones candidate o unresolved antes de aprobar."])];
+  if (options.analysisId !== undefined) proposal.inferences.push(`Análisis asociado: ${options.analysisId}`);
+  proposal.decisions = [...new Set([...proposal.decisions, ...humanRequirements])];
+  options.validator?.assert<ProposalModel>("proposal", proposal);
+  const proposalId = proposalIdentifier(runId, type, request, humanRequirements, { contextId: context.context_id, capabilityId: capability?.id, analysisId: options.analysisId });
   const root = join(artifacts.root, "proposals", proposalId);
   await mkdir(root, { recursive: true });
   const jsonPath = join(root, "proposal.json");
   const markdownPath = join(root, "proposal.md");
   await atomicWrite(jsonPath, `${JSON.stringify({ proposal_id: proposalId, run_id: runId, ...proposal }, null, 2)}\n`);
   await atomicWrite(markdownPath, renderProposal(proposalId, runId, proposal));
-  return { proposal_id: proposalId, status: "review_required", json_path: jsonPath, markdown_path: markdownPath, proposal };
+  return { proposal_id: proposalId, status: "review_required", json_path: jsonPath, markdown_path: markdownPath, proposal, context_id: context.context_id };
 }
 
-export function proposalIdentifier(runId: string, type: ProposalType, request: string, humanRequirements: readonly string[]): string {
-  return stableId("proposal", runId, type, request, humanRequirements);
+export function proposalIdentifier(runId: string, type: ProposalType, request: string, humanRequirements: readonly string[], context: Record<string, unknown> = {}): string {
+  return stableId("proposal", runId, type, request, humanRequirements, context);
 }
 
 export function validatedRunRoot(stateRoot: string, runId: string): string {
@@ -348,7 +473,22 @@ function findingsFromGraph(graph: KnowledgeGraph): Finding[] {
 
 function renderProposal(proposalId: string, runId: string, proposal: ProposalModel): string {
   const section = (title: string, values: string[]) => `## ${title}\n\n${values.length > 0 ? values.map((value) => `- ${value}`).join("\n") : "- Pendiente de decisión humana."}\n\n`;
-  return `# Propuesta ${proposalId}\n\nEstado: **requiere revisión**  \nRun de evidencia: \`${runId}\`  \nTipo: \`${proposal.proposal_type}\`\n\n${section("Estado actual", proposal.current_state)}${section("Cambios propuestos", proposal.proposed_changes)}${section("Componentes afectados", proposal.affected_components)}${section("Requisitos", proposal.requirements)}${section("Contratos", proposal.contracts)}${section("Fases", proposal.phases)}${section("Criterios de aceptación", proposal.acceptance_criteria)}${section("Pruebas previstas", proposal.tests)}${section("Riesgos", proposal.risks)}${section("Rollback", proposal.rollback)}${section("Alternativas", proposal.alternatives)}${section("Decisiones pendientes", proposal.pending_decisions)}`;
+  const changes = proposal.changes_by_repository.map((item) => `${item.repository_id}: ${item.changes.join("; ")} [${item.document_paths.join(", ")}]`);
+  const responsibilities = proposal.responsibilities.map((item) => `${item.repository_id}: ${item.role} (${item.basis})`);
+  const evidence = proposal.documentary_evidence.map((item) => `${item.document_path} · chunk ${item.chunk_id}${item.evidence_ids.length > 0 ? ` · ${item.evidence_ids.join(", ")}` : ""}`);
+  return `# Propuesta ${proposalId}\n\nEstado: **requiere revisión**  \nRun de evidencia: \`${runId}\`  \nTipo: \`${proposal.proposal_type}\`  \nConfianza: **${proposal.confidence}**\n\n## Objetivo\n\n${proposal.objective}\n\n${section("Alcance", proposal.scope)}${section("Exclusiones", proposal.exclusions)}${section("Hechos observados", proposal.facts)}${section("Inferencias", proposal.inferences)}${section("Decisiones humanas", proposal.decisions)}${section("Estado actual", proposal.current_state)}${section("Flujo actual", proposal.current_flow)}${section("Flujo objetivo", proposal.target_flow)}${section("Cambios propuestos", proposal.proposed_changes)}${section("Cambios por repositorio", changes)}${section("Responsabilidades por sistema", responsibilities)}${section("Componentes afectados", proposal.affected_components)}${section("Requisitos", proposal.requirements)}${section("Contratos", proposal.contracts)}${section("Datos y propiedad", proposal.data_and_ownership)}${section("Comportamiento reactivo", proposal.reactive_behavior)}${section("Fases", proposal.phases)}${section("Orden de despliegue", proposal.deployment_order)}${section("Criterios de aceptación", proposal.acceptance_criteria)}${section("Validación prevista", proposal.validation)}${section("Pruebas previstas", proposal.tests)}${section("Riesgos", proposal.risks)}${section("Rollback", proposal.rollback)}${section("Alternativas", proposal.alternatives)}${section("Decisiones pendientes", proposal.pending_decisions)}${section("Evidencia documental", evidence)}`;
+}
+
+async function renderIntelligenceViews(vaultRoot: string, capabilities: readonly Capability[]): Promise<void> {
+  const capabilityRows = capabilities.map((item) => `| ${item.name} | \`${item.id}\` | ${item.repositories.join(", ") || "por confirmar"} | ${item.entrypoints.join("<br>") || "—"} | ${item.confidence} |`);
+  const responsibilityRows = capabilities.flatMap((item) => item.responsibilities.map((responsibility) => `| ${item.name} | ${responsibility.repository_id} | ${responsibility.role} | ${responsibility.basis} |`));
+  const migrationRows = capabilities.flatMap((item) => item.legacy_dependencies.map((dependency) => `| ${item.name} | ${dependency.from} | ${dependency.to} | ${dependency.status} |`));
+  await Promise.all([
+    atomicWrite(join(vaultRoot, "Inteligencia", "capacidades.md"), `# Capacidades documentales\n\nVista derivada; no reemplaza la documentación técnica existente.\n\n| Capacidad | ID | Sistemas | Entradas | Confianza |\n|---|---|---|---|---|\n${capabilityRows.join("\n") || "| Sin capacidades inferidas | — | — | — | low |"}\n`),
+    atomicWrite(join(vaultRoot, "Inteligencia", "responsabilidades.md"), `# Responsabilidades por capacidad\n\nLas filas \`explicit\` provienen de configuración humana; las \`extracted\` son observaciones técnicas.\n\n| Capacidad | Sistema | Responsabilidad | Base |\n|---|---|---|---|\n${responsibilityRows.join("\n") || "| Por confirmar | — | — | — |"}\n`),
+    atomicWrite(join(vaultRoot, "Inteligencia", "migraciones.md"), `# Estado de migraciones\n\n| Capacidad | Origen | Destino | Estado |\n|---|---|---|---|\n${migrationRows.join("\n") || "| Sin migraciones configuradas | — | — | unresolved |"}\n`),
+    atomicWrite(join(vaultRoot, "Inteligencia", "analisis-impacto.md"), "# Análisis de impacto\n\nLos análisis se generan bajo demanda con `docsys_analyze_change` y permanecen en el estado privado del run para revisión. Esta vista no inventa estimaciones de tiempo o dinero.\n"),
+  ]);
 }
 
 async function readJson<T>(path: string): Promise<T> { return JSON.parse(await readFile(path, "utf8")) as T; }
